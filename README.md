@@ -4,6 +4,8 @@ MVP interface-first pour transformer les commentaires et messages sociaux en con
 
 Le projet réunit le frontend React et l’API dans un seul Cloudflare Worker. Il démarre en mode démonstration sans clé externe, puis bascule progressivement vers les API Instagram, YouTube et TikTok.
 
+**Démonstration Cloudflare :** https://neptune-social-conversion.neptunebusinessclub.workers.dev
+
 ## Ce qui fonctionne déjà
 
 - tableau de bord et entonnoir social → client ;
