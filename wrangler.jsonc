@@ -19,7 +19,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "neptune-social-conversion"
+      "database_name": "neptune-social-conversion",
+      "database_id": "6d245c85-f43b-49f6-9a9e-d6f9323ce946",
+      "migrations_dir": "migrations"
     }
   ],
   "r2_buckets": [
