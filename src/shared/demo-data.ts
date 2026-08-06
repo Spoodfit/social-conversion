@@ -1,0 +1,147 @@
+import type { BootstrapData } from './types';
+
+// Synthetic fixtures only: no identity, social handle, message or metric below refers to a real person or account.
+export const demoData: BootstrapData = {
+  workspace: { name: 'Espace Démo Neptune', plan: 'MVP Cloudflare', mode: 'demo' },
+  metrics: [
+    { label: 'Interactions captées', value: '1 200', delta: '+12,0 %', direction: 'up', detail: 'donnée fictive de démonstration' },
+    { label: 'Conversations ouvertes', value: '180', delta: '+8,0 %', direction: 'up', detail: '15 % des interactions fictives' },
+    { label: 'Leads qualifiés', value: '42', delta: '+16,0 %', direction: 'up', detail: '23 % des conversations fictives' },
+    { label: 'CA attribué', value: '12 500 €', delta: '+6,0 %', direction: 'up', detail: 'montant fictif de démonstration' },
+  ],
+  funnel: [
+    { label: 'Interactions', value: 1200, percent: 100 },
+    { label: 'Conversations', value: 180, percent: 68 },
+    { label: 'Qualifiés', value: 42, percent: 43 },
+    { label: 'Rendez-vous', value: 18, percent: 27 },
+    { label: 'Clients', value: 7, percent: 14 },
+  ],
+  weeklyActivity: [36, 52, 44, 68, 61, 82, 73],
+  connections: [
+    {
+      id: 'ig-carcassonne',
+      platform: 'instagram',
+      name: 'Compte Instagram Démo A',
+      handle: '@compte_demo_instagram_a',
+      status: 'connected',
+      lastSync: 'À l’instant',
+      accent: '#d946ef',
+      capabilities: [
+        { key: 'comments', label: 'Commentaires', available: true },
+        { key: 'direct_messages', label: 'Messages privés', available: true },
+        { key: 'private_reply', label: 'Réponse privée', available: true },
+        { key: 'follow_trigger', label: 'Nouveau follower', available: false, note: 'Accès Meta non garanti' },
+      ],
+    },
+    {
+      id: 'ig-toulouse',
+      platform: 'instagram',
+      name: 'Compte Instagram Démo B',
+      handle: '@compte_demo_instagram_b',
+      status: 'connected',
+      lastSync: 'Il y a 2 min',
+      accent: '#e879f9',
+      capabilities: [
+        { key: 'comments', label: 'Commentaires', available: true },
+        { key: 'direct_messages', label: 'Messages privés', available: true },
+        { key: 'private_reply', label: 'Réponse privée', available: true },
+        { key: 'follow_trigger', label: 'Nouveau follower', available: false, note: 'Liste d’attente Meta' },
+      ],
+    },
+    {
+      id: 'ig-media',
+      platform: 'instagram',
+      name: 'Compte Instagram Démo C',
+      handle: '@compte_demo_instagram_c',
+      status: 'attention',
+      lastSync: 'Il y a 3 h',
+      accent: '#c026d3',
+      capabilities: [
+        { key: 'comments', label: 'Commentaires', available: true },
+        { key: 'direct_messages', label: 'Messages privés', available: true },
+        { key: 'private_reply', label: 'Réponse privée', available: false, note: 'Permission à renouveler' },
+        { key: 'follow_trigger', label: 'Nouveau follower', available: false, note: 'Accès Meta non garanti' },
+      ],
+    },
+    {
+      id: 'yt-neptune',
+      platform: 'youtube',
+      name: 'Chaîne YouTube Démo',
+      handle: '@chaine_demo_youtube',
+      status: 'connected',
+      lastSync: 'Il y a 8 min',
+      accent: '#ef4444',
+      capabilities: [
+        { key: 'comments', label: 'Commentaires', available: true },
+        { key: 'direct_messages', label: 'Messages privés', available: false, note: 'Non disponible sur YouTube' },
+        { key: 'private_reply', label: 'Réponse publique', available: true },
+        { key: 'follow_trigger', label: 'Nouvel abonné', available: false, note: 'Identité non exposée par l’API' },
+      ],
+    },
+    {
+      id: 'tt-neptune',
+      platform: 'tiktok',
+      name: 'Compte TikTok Démo',
+      handle: '@compte_demo_tiktok',
+      status: 'limited',
+      lastSync: 'Connexion à finaliser',
+      accent: '#22d3ee',
+      capabilities: [
+        { key: 'comments', label: 'Commentaires', available: true },
+        { key: 'direct_messages', label: 'Business Messaging', available: false, note: 'Accès partenaire requis' },
+        { key: 'private_reply', label: 'Réponse privée', available: false, note: 'Accès partenaire requis' },
+        { key: 'follow_trigger', label: 'Nouveau follower', available: false, note: 'Non disponible' },
+      ],
+    },
+  ],
+  conversations: [
+    {
+      id: 'conv-1', name: 'Prospect Démo 01', handle: '@prospect_demo_01', initials: 'P1', platform: 'instagram', account: 'Instagram Démo A', unread: 2, priority: 'haute',
+      lastMessage: 'Oui, je voudrais connaître les prochaines dates.', time: '09:42', sentiment: 'positif', stage: 'Qualifié', intent: 'Événement networking', estimatedValue: 1200,
+      messages: [
+        { id: 'm1', direction: 'inbound', sender: 'Prospect 01', body: 'Bonjour ! Votre événement de démonstration m’intéresse 👋', timestamp: '09:31' },
+        { id: 'm2', direction: 'outbound', sender: 'Neptune', body: 'Bonjour, avec plaisir. Cherchez-vous plutôt des partenaires ou de futurs clients ?', timestamp: '09:35', aiAssisted: true },
+        { id: 'm3', direction: 'inbound', sender: 'Prospect 01', body: 'Plutôt de futurs clients. Oui, je voudrais connaître les prochaines dates.', timestamp: '09:42' },
+      ],
+    },
+    {
+      id: 'conv-2', name: 'Prospect Démo 02', handle: '@prospect_demo_02', initials: 'P2', platform: 'instagram', account: 'Instagram Démo B', unread: 1, priority: 'normale',
+      lastMessage: 'Est-ce que les indépendants peuvent venir ?', time: '09:18', sentiment: 'neutre', stage: 'Nouveau', intent: 'Adhésion club', estimatedValue: 590,
+      messages: [{ id: 'm4', direction: 'inbound', sender: 'Prospect 02', body: 'Est-ce que les indépendants peuvent venir ?', timestamp: '09:18' }],
+    },
+    {
+      id: 'conv-3', name: 'Entreprise Démo 03', handle: '@entreprise_demo_03', initials: 'E3', platform: 'tiktok', account: 'TikTok Démo', unread: 0, priority: 'normale',
+      lastMessage: 'Merci pour les infos, on en parle en équipe.', time: 'Hier', sentiment: 'positif', stage: 'Proposition', intent: 'Partenariat média', estimatedValue: 4800,
+      messages: [{ id: 'm5', direction: 'inbound', sender: 'Entreprise 03', body: 'Merci pour les infos, on en parle en équipe.', timestamp: 'Hier, 17:05' }],
+    },
+    {
+      id: 'conv-4', name: 'Prospect Démo 04', handle: '@prospect_demo_04', initials: 'P4', platform: 'youtube', account: 'YouTube Démo', unread: 0, priority: 'normale',
+      lastMessage: 'Super épisode. Comment participer au prochain ?', time: 'Hier', sentiment: 'positif', stage: 'Nouveau', intent: 'Participation podcast', estimatedValue: 0,
+      messages: [{ id: 'm6', direction: 'inbound', sender: 'Prospect 04', body: 'Super épisode. Comment participer au prochain ?', timestamp: 'Hier, 14:22' }],
+    },
+    {
+      id: 'conv-5', name: 'Prospect Démo 05', handle: '@prospect_demo_05', initials: 'P5', platform: 'instagram', account: 'Instagram Démo C', unread: 0, priority: 'normale',
+      lastMessage: 'Je vous envoie mon brief lundi.', time: 'Lun.', sentiment: 'positif', stage: 'Rendez-vous', intent: 'Production de contenu', estimatedValue: 2500,
+      messages: [{ id: 'm7', direction: 'inbound', sender: 'Prospect 05', body: 'Je vous envoie mon brief lundi.', timestamp: 'Lun., 18:03' }],
+    },
+  ],
+  automations: [
+    { id: 'auto-1', name: 'Intérêt événement → qualification', trigger: 'Commentaire contient “date” ou “venir”', action: 'Réponse privée + 2 questions', platform: 'instagram', active: true, executions: 48, conversion: 31 },
+    { id: 'auto-2', name: 'Demande d’adhésion', trigger: 'DM contient “club”, “adhésion” ou “membre”', action: 'Collecter activité et ville', platform: 'instagram', active: true, executions: 24, conversion: 44 },
+    { id: 'auto-3', name: 'Commentaire YouTube', trigger: 'Nouveau commentaire avec intention', action: 'Créer un lead et suggérer une réponse', platform: 'youtube', active: true, executions: 16, conversion: 16 },
+    { id: 'auto-4', name: 'Nouveau follower', trigger: 'Compte suivi récemment', action: 'Envoyer un message d’accueil', platform: 'instagram', active: false, executions: 0, conversion: 0, caveat: 'À activer uniquement si Meta accorde la fonctionnalité.' },
+  ],
+  leads: [
+    { id: 'lead-1', name: 'Prospect Démo 02', initials: 'P2', handle: '@prospect_demo_02', source: 'instagram', stage: 'Nouveau', value: 590, score: 64, lastActivity: 'Il y a 24 min', tags: ['Secteur A', 'Ville B'] },
+    { id: 'lead-2', name: 'Prospect Démo 04', initials: 'P4', handle: '@prospect_demo_04', source: 'youtube', stage: 'Nouveau', value: 0, score: 52, lastActivity: 'Hier', tags: ['Podcast'] },
+    { id: 'lead-3', name: 'Prospect Démo 01', initials: 'P1', handle: '@prospect_demo_01', source: 'instagram', stage: 'Qualifié', value: 1200, score: 87, lastActivity: 'À l’instant', tags: ['Secteur B', 'Événement'] },
+    { id: 'lead-4', name: 'Prospect Démo 05', initials: 'P5', handle: '@prospect_demo_05', source: 'instagram', stage: 'Rendez-vous', value: 2500, score: 91, lastActivity: 'Lundi', tags: ['Contenu', 'B2B'] },
+    { id: 'lead-5', name: 'Entreprise Démo 03', initials: 'E3', handle: '@entreprise_demo_03', source: 'tiktok', stage: 'Proposition', value: 4800, score: 83, lastActivity: 'Hier', tags: ['Secteur C', 'Partenariat'] },
+    { id: 'lead-6', name: 'Client Démo 06', initials: 'C6', handle: '@client_demo_06', source: 'instagram', stage: 'Gagné', value: 3600, score: 96, lastActivity: 'Il y a 3 j', tags: ['Secteur D', 'Client'] },
+  ],
+  sources: [
+    { platform: 'instagram', conversations: 132, qualified: 30, revenue: 8500 },
+    { platform: 'youtube', conversations: 32, qualified: 8, revenue: 2800 },
+    { platform: 'tiktok', conversations: 16, qualified: 4, revenue: 1200 },
+  ],
+};
