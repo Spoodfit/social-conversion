@@ -3,7 +3,9 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
+      - recovery/social-conversion-production
 
 permissions:
   contents: read
@@ -11,16 +13,26 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-      - run: npm run cf-typegen
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npm run cf:check
+      - name: Install locked dependencies
+        run: npm ci --no-fund
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Generate Cloudflare types
+        run: npm run cf-typegen
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Worker tests
+        run: npm test
+      - name: Recovery safety audit
+        run: npm run audit:recovery
+      - name: Build
+        run: npm run build
+      - name: Wrangler dry-run
+        run: npm run cf:check
