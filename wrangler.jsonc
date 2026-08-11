@@ -14,7 +14,8 @@
   },
   "vars": {
     "APP_ENV": "production",
-    "DEMO_MODE": "true"
+    "DEMO_MODE": "true",
+    "LIVE_READY": "false"
   },
   "d1_databases": [
     {
