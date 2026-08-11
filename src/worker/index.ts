@@ -9,6 +9,14 @@ import { optionalSecret, verifyMetaSignature } from './security';
 type AppBindings = { Bindings: Env };
 const app = new Hono<AppBindings>();
 
+function isDemoMode(env: Env): boolean {
+  return env.DEMO_MODE === 'true';
+}
+
+function liveRuntimeReady(env: Env): boolean {
+  return env.LIVE_READY === 'true';
+}
+
 app.use('*', secureHeaders({
   crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: {
@@ -24,9 +32,30 @@ app.use('*', secureHeaders({
 
 app.get('/api/health', (c) => c.json({ status: 'ok', service: 'neptune-social-conversion', time: new Date().toISOString() }));
 
+app.get('/api/runtime', (c) => {
+  const demo = isDemoMode(c.env);
+  return c.json({
+    mode: demo ? 'demo' : 'live',
+    ready: demo || liveRuntimeReady(c.env),
+    outboundReady: false,
+    aiReady: false,
+  });
+});
+
 app.get('/api/bootstrap', (c) => {
-  const mode = c.env.DEMO_MODE === 'true' ? 'demo' : 'live';
-  return c.json({ ...demoData, workspace: { ...demoData.workspace, mode } });
+  if (isDemoMode(c.env)) return c.json(demoData);
+  if (!liveRuntimeReady(c.env)) {
+    return c.json({
+      error: 'Live runtime is locked until production data sources and connectors are validated.',
+      code: 'LIVE_NOT_READY',
+    }, 503);
+  }
+
+  // Deliberately fail closed until the D1 live bootstrap is implemented.
+  return c.json({
+    error: 'Live bootstrap is not implemented yet.',
+    code: 'LIVE_BOOTSTRAP_NOT_IMPLEMENTED',
+  }, 501);
 });
 
 app.post('/api/messages', async (c) => {
@@ -40,23 +69,29 @@ app.post('/api/messages', async (c) => {
 
   const sentAt = new Date().toISOString();
   const id = crypto.randomUUID();
-  if (c.env.DEMO_MODE !== 'true') {
-    await c.env.DB
-      .prepare(
-        `INSERT INTO messages (id, conversation_id, direction, message_type, body, sent_at, created_at)
-         VALUES (?, ?, 'outbound', 'message', ?, ?, ?)`,
-      )
-      .bind(id, body.conversationId, message, sentAt, sentAt)
-      .run();
+  if (isDemoMode(c.env)) {
+    return c.json({ id, status: 'simulated', sentAt }, 202);
   }
 
-  return c.json({ id, status: c.env.DEMO_MODE === 'true' ? 'simulated' : 'queued', sentAt }, 202);
+  // Never persist or report a fake outbound success until a real platform connector exists.
+  return c.json({
+    error: 'Outbound social connector is not configured.',
+    code: 'OUTBOUND_NOT_READY',
+  }, 503);
 });
 
 app.post('/api/ai/suggest', async (c) => {
   const body = await c.req
     .json<{ intent?: string; name?: string }>()
     .catch((): { intent?: string; name?: string } => ({}));
+
+  if (!isDemoMode(c.env)) {
+    return c.json({
+      error: 'AI provider is not configured for live use.',
+      code: 'AI_NOT_READY',
+    }, 503);
+  }
+
   const firstName = body.name?.trim().split(/\s+/)[0] || 'vous';
   const suggestion = `Avec plaisir ${firstName}. Pour vous orienter vers le bon format, préférez-vous rencontrer de futurs clients ou des partenaires ?`;
   return c.json({ suggestion, mode: 'draft', generatedBy: 'demo-policy' });
@@ -87,6 +122,7 @@ app.post('/webhooks/meta', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400);
   }
 
+  // The query-string connection mapping is temporary and must be replaced by signed-payload account resolution.
   const events = normalizeMetaWebhook(payload, c.req.query('connection') || 'meta-default');
   await Promise.all(events.map((event) => c.env.EVENTS_QUEUE.send(event, { contentType: 'json' })));
   console.log(JSON.stringify({ event: 'meta_webhook_accepted', count: events.length }));
