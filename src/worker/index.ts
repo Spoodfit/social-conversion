@@ -14,7 +14,8 @@ function isDemoMode(env: Env): boolean {
 }
 
 function liveRuntimeReady(env: Env): boolean {
-  return Reflect.get(env, 'LIVE_READY') === 'true';
+  const runtimeEnv = env as unknown as Record<string, unknown>;
+  return runtimeEnv.LIVE_READY === 'true';
 }
 
 app.use('*', secureHeaders({
@@ -51,7 +52,6 @@ app.get('/api/bootstrap', (c) => {
     }, 503);
   }
 
-  // Deliberately fail closed until the D1 live bootstrap is implemented.
   return c.json({
     error: 'Live bootstrap is not implemented yet.',
     code: 'LIVE_BOOTSTRAP_NOT_IMPLEMENTED',
@@ -73,7 +73,6 @@ app.post('/api/messages', async (c) => {
     return c.json({ id, status: 'simulated', sentAt }, 202);
   }
 
-  // Never persist or report a fake outbound success until a real platform connector exists.
   return c.json({
     error: 'Outbound social connector is not configured.',
     code: 'OUTBOUND_NOT_READY',
@@ -122,7 +121,6 @@ app.post('/webhooks/meta', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400);
   }
 
-  // The query-string connection mapping is temporary and must be replaced by signed-payload account resolution.
   const events = normalizeMetaWebhook(payload, c.req.query('connection') || 'meta-default');
   await Promise.all(events.map((event) => c.env.EVENTS_QUEUE.send(event, { contentType: 'json' })));
   console.log(JSON.stringify({ event: 'meta_webhook_accepted', count: events.length }));
