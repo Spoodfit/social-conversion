@@ -22,8 +22,8 @@
     "APP_ENV": "production",
     "DEMO_MODE": "true",
     "LIVE_READY": "false",
-    "TEAM_DOMAIN": "https://CHANGE_ME.cloudflareaccess.com",
-    "POLICY_AUD": "CHANGE_ME"
+    "TEAM_DOMAIN": "https://neptune-business.cloudflareaccess.com",
+    "POLICY_AUD": "34242650323f08b7d0ee045701f9b38b33b7e15009689e80253ffe6329111374"
   },
   "ratelimits": [
     {
