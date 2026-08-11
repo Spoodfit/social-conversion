@@ -14,7 +14,7 @@ function isDemoMode(env: Env): boolean {
 }
 
 function liveRuntimeReady(env: Env): boolean {
-  return env.LIVE_READY === 'true';
+  return Reflect.get(env, 'LIVE_READY') === 'true';
 }
 
 app.use('*', secureHeaders({
