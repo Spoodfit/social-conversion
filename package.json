@@ -14,7 +14,9 @@
     "cf-typegen": "wrangler types",
     "cf:check": "wrangler deploy --dry-run",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
-    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "audit:recovery": "node scripts/recovery-audit.mjs",
+    "verify": "npm run cf-typegen && npm run typecheck && npm test && npm run audit:recovery && npm run build && npm run cf:check"
   },
   "dependencies": {
     "hono": "4.13.0",
