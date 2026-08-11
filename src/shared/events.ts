@@ -1,4 +1,4 @@
-import type { NormalizedSocialEvent } from './types';
+import type { NormalizedSocialEvent, SocialConnectionIdentity } from './types';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -10,13 +10,33 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export function normalizeMetaWebhook(payload: unknown, connectionId = 'meta-default'): NormalizedSocialEvent[] {
+export function extractMetaExternalAccountIds(payload: unknown): string[] {
+  const root = asRecord(payload);
+  const entries = Array.isArray(root?.entry) ? root.entry : [];
+  const ids = new Set<string>();
+
+  for (const item of entries.slice(0, 100)) {
+    const id = asString(asRecord(item)?.id);
+    if (id) ids.add(id);
+  }
+
+  return [...ids];
+}
+
+export function normalizeMetaWebhook(
+  payload: unknown,
+  connections: ReadonlyMap<string, SocialConnectionIdentity>,
+): NormalizedSocialEvent[] {
   const root = asRecord(payload);
   const entries = Array.isArray(root?.entry) ? root.entry : [];
   const events: NormalizedSocialEvent[] = [];
 
-  for (const item of entries) {
+  for (const item of entries.slice(0, 100)) {
     const entry = asRecord(item);
+    const externalAccountId = asString(entry?.id);
+    const connection = externalAccountId ? connections.get(externalAccountId) : undefined;
+    if (!connection) continue;
+
     const messaging = Array.isArray(entry?.messaging) ? entry.messaging : [];
     for (const rawMessage of messaging) {
       const messageEvent = asRecord(rawMessage);
@@ -28,15 +48,16 @@ export function normalizeMetaWebhook(payload: unknown, connectionId = 'meta-defa
       if (!senderId || !text || !messageId) continue;
 
       events.push({
-        id: messageId,
+        id: `${connection.id}:${messageId}`,
+        externalEventId: messageId,
         platform: 'instagram',
-        connectionId,
+        workspaceId: connection.workspaceId,
+        connectionId: connection.id,
         eventType: 'message',
         externalContactId: senderId,
         contactName: `Contact ${senderId.slice(-4)}`,
         text,
         occurredAt: new Date(Number(messageEvent?.timestamp) || Date.now()).toISOString(),
-        raw: rawMessage,
       });
     }
 
@@ -51,15 +72,16 @@ export function normalizeMetaWebhook(payload: unknown, connectionId = 'meta-defa
       if (!externalContactId || !text || !id) continue;
 
       events.push({
-        id,
+        id: `${connection.id}:${id}`,
+        externalEventId: id,
         platform: 'instagram',
-        connectionId,
+        workspaceId: connection.workspaceId,
+        connectionId: connection.id,
         eventType: 'comment',
         externalContactId,
         contactName: asString(from?.username) ?? `Contact ${externalContactId.slice(-4)}`,
         text,
         occurredAt: new Date().toISOString(),
-        raw: rawChange,
       });
     }
   }

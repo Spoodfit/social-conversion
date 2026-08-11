@@ -16,10 +16,12 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "audit:recovery": "node scripts/recovery-audit.mjs",
+    "validate:production-config": "node scripts/validate-production-config.mjs",
     "verify": "npm run cf-typegen && npm run typecheck && npm test && npm run audit:recovery && npm run build && npm run cf:check"
   },
   "dependencies": {
     "hono": "4.13.0",
+    "jose": "6.2.8",
     "lucide-react": "1.29.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"

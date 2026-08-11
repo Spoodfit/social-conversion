@@ -104,12 +104,18 @@ export interface BootstrapData {
 
 export interface NormalizedSocialEvent {
   id: string;
+  externalEventId: string;
   platform: Platform;
+  workspaceId: string;
   connectionId: string;
   eventType: 'message' | 'comment';
   externalContactId: string;
   contactName: string;
   text: string;
   occurredAt: string;
-  raw: unknown;
+}
+
+export interface SocialConnectionIdentity {
+  id: string;
+  workspaceId: string;
 }

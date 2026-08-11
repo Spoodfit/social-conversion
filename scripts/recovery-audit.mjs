@@ -3,6 +3,8 @@ import { join, relative } from 'node:path';
 
 const root = process.cwd();
 const worker = readFileSync(join(root, 'src/worker/index.ts'), 'utf8');
+const auth = readFileSync(join(root, 'src/worker/auth.ts'), 'utf8');
+const persistence = readFileSync(join(root, 'src/worker/persistence.ts'), 'utf8');
 const wrangler = readFileSync(join(root, 'wrangler.jsonc'), 'utf8');
 const failures = [];
 
@@ -16,6 +18,30 @@ if (worker.includes("status: 'queued'")) {
 
 if (!/"LIVE_READY"\s*:\s*"false"/.test(wrangler)) {
   failures.push('LIVE_READY must default to false');
+}
+
+if (!/"workers_dev"\s*:\s*false/.test(wrangler) || !/"preview_urls"\s*:\s*false/.test(wrangler)) {
+  failures.push('workers.dev and preview URLs must remain disabled');
+}
+
+if (!/"run_worker_first"\s*:\s*\[[^\]]*"\/health"[^\]]*"\/api\/\*"[^\]]*"\/webhooks\/\*"/s.test(wrangler)) {
+  failures.push('health, API and webhook routes must run through the Worker before static assets');
+}
+
+for (const marker of ['cf-access-jwt-assertion', 'ACCESS_NOT_CONFIGURED', 'resolveWorkspaceMembership']) {
+  if (!worker.includes(marker)) failures.push(`missing API security marker: ${marker}`);
+}
+
+for (const marker of ['jwtVerify', "algorithms: ['RS256']", 'issuer:', 'audience:']) {
+  if (!auth.includes(marker)) failures.push(`missing Access JWT verification marker: ${marker}`);
+}
+
+if (/query\(['"]connection['"]\)/.test(worker)) {
+  failures.push('Meta connection identity must never come from a caller-controlled query parameter');
+}
+
+if (/workspace_id[^\n]*'default'/.test(persistence) || persistence.includes('event.raw')) {
+  failures.push('event persistence must be tenant-scoped and must not retain raw webhook payloads');
 }
 
 const secretPatterns = [

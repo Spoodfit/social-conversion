@@ -9,10 +9,12 @@ type RuntimeState = {
 };
 
 function RuntimeGate() {
+  const uiOnly = import.meta.env.VITE_UI_ONLY === 'true';
   const [runtime, setRuntime] = useState<RuntimeState>();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (uiOnly) return undefined;
     let active = true;
     fetch('/api/runtime', { headers: { accept: 'application/json' } })
       .then((response) => {
@@ -22,7 +24,9 @@ function RuntimeGate() {
       .then((payload) => active && setRuntime(payload))
       .catch(() => active && setFailed(true));
     return () => { active = false; };
-  }, []);
+  }, [uiOnly]);
+
+  if (uiOnly) return <App />;
 
   if (failed) {
     return (
