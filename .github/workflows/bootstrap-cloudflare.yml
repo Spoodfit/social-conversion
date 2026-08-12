@@ -1,0 +1,70 @@
+name: Bootstrap Cloudflare D1
+
+on:
+  workflow_dispatch:
+    inputs:
+      admin_email:
+        description: Adresse Cloudflare Access du premier administrateur
+        required: true
+        type: string
+        default: neptunebusinessclub@gmail.com
+
+permissions:
+  contents: read
+
+concurrency:
+  group: social-conversion-d1-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Check out the validated recovery release
+        uses: actions/checkout@v4
+        with:
+          ref: 7b9af9833ea127b6678f125296383375fbaa9250
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-fund
+
+      - name: Verify the release before touching D1
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm run verify
+          npm run validate:production-config
+
+      - name: Validate administrator email
+        env:
+          ADMIN_EMAIL: ${{ inputs.admin_email }}
+        run: |
+          node -e "const email = process.env.ADMIN_EMAIL ?? ''; if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/.test(email)) { console.error('Invalid administrator email'); process.exit(1); }"
+
+      - name: Apply pending D1 migrations
+        run: npx wrangler d1 migrations apply DB --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Invite the initial administrator idempotently
+        env:
+          ADMIN_EMAIL: ${{ inputs.admin_email }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute DB --remote --command "INSERT INTO workspace_members (id, workspace_id, access_subject, email, role, status) VALUES ('member-initial-admin', 'default', NULL, '${ADMIN_EMAIL}', 'admin', 'invited') ON CONFLICT(workspace_id, email) DO UPDATE SET role = 'admin', updated_at = CURRENT_TIMESTAMP"
+
+      - name: Verify the administrator invitation
+        env:
+          ADMIN_EMAIL: ${{ inputs.admin_email }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute DB --remote --command "SELECT workspace_id, role, status, access_subject IS NOT NULL AS identity_bound FROM workspace_members WHERE workspace_id = 'default' AND email = '${ADMIN_EMAIL}'"
