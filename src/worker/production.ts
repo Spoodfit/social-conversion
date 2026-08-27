@@ -2,6 +2,13 @@ import baseWorker from './index';
 import { getAccessConfig, verifyAccessToken } from './auth';
 import { resolveWorkspaceMembership, roleCanMutate, writeAuditLog, type WorkspacePrincipal } from './authorization';
 import {
+  completeInstagramOAuth,
+  InstagramOAuthError,
+  instagramOAuthConfigured,
+  refreshExpiringInstagramTokens,
+  startInstagramOAuth,
+} from './instagram-oauth';
+import {
   deliverInstagramOutbound,
   instagramOutboundConfigured,
   type OutboundDeliveryEnvelope,
@@ -29,7 +36,7 @@ function isLive(env: Env): boolean {
   return env.DEMO_MODE !== 'true' && String(env.LIVE_READY) === 'true';
 }
 
-async function authenticateOutbound(request: Request, env: Env): Promise<
+async function authenticateMutation(request: Request, env: Env, path: string): Promise<
   | { ok: true; principal: WorkspacePrincipal }
   | { ok: false; response: Response }
 > {
@@ -53,14 +60,14 @@ async function authenticateOutbound(request: Request, env: Env): Promise<
   try {
     identity = await verifyAccessToken(token, accessConfig);
   } catch {
-    console.warn(JSON.stringify({ event: 'access_token_rejected', path: '/api/messages' }));
+    console.warn(JSON.stringify({ event: 'access_token_rejected', path }));
     return {
       ok: false,
       response: Response.json({ error: 'Authentication failed.', code: 'ACCESS_TOKEN_INVALID' }, { status: 401 }),
     };
   }
 
-  const rateLimit = await env.API_RATE_LIMITER.limit({ key: `${identity.subject}:POST:/api/messages` });
+  const rateLimit = await env.API_RATE_LIMITER.limit({ key: `${identity.subject}:${request.method}:${path}` });
   if (!rateLimit.success) {
     return {
       ok: false,
@@ -92,7 +99,7 @@ async function authenticateOutbound(request: Request, env: Env): Promise<
 }
 
 async function handleOutboundApi(request: Request, env: Env): Promise<Response> {
-  const auth = await authenticateOutbound(request, env);
+  const auth = await authenticateMutation(request, env, '/api/messages');
   if (!auth.ok) return auth.response;
   if (!isLive(env)) {
     return Response.json({ error: 'Live outbound is locked.', code: 'LIVE_NOT_READY' }, { status: 503 });
@@ -172,6 +179,84 @@ async function handleOutboundApi(request: Request, env: Env): Promise<Response> 
   }
 }
 
+function oauthErrorResponse(error: InstagramOAuthError): Response {
+  if (error.code === 'OAUTH_NOT_CONFIGURED') {
+    return Response.json({ error: error.message, code: error.code }, { status: 503 });
+  }
+  if (error.code === 'CONNECTION_NOT_FOUND') {
+    return Response.json({ error: error.message, code: error.code }, { status: 404 });
+  }
+  if (error.code === 'INVALID_OAUTH_STATE' || error.code === 'OAUTH_STATE_EXPIRED') {
+    return Response.json({ error: error.message, code: error.code }, { status: 400 });
+  }
+  return Response.json({ error: error.message, code: error.code }, { status: 502 });
+}
+
+async function handleInstagramOAuthStart(request: Request, env: Env): Promise<Response> {
+  const auth = await authenticateMutation(request, env, '/api/oauth/instagram/start');
+  if (!auth.ok) return auth.response;
+  if (auth.principal.role !== 'admin' && auth.principal.role !== 'manager') {
+    return Response.json({ error: 'Only workspace administrators or managers can connect social accounts.', code: 'ROLE_FORBIDDEN' }, { status: 403 });
+  }
+  if (env.DEMO_MODE === 'true') {
+    return Response.json({ error: 'Instagram OAuth is disabled in demo mode.', code: 'LIVE_NOT_READY' }, { status: 503 });
+  }
+
+  const body = await request.json().catch(() => undefined) as { connectionId?: unknown } | undefined;
+  const connectionId = typeof body?.connectionId === 'string' ? body.connectionId : undefined;
+  try {
+    return Response.json(await startInstagramOAuth(env.DB, env, auth.principal, connectionId), { status: 201 });
+  } catch (error) {
+    if (error instanceof InstagramOAuthError) return oauthErrorResponse(error);
+    throw error;
+  }
+}
+
+function oauthRedirect(env: Env, outcome: 'connected' | 'error'): string {
+  const configured = Reflect.get(env, 'INSTAGRAM_REDIRECT_URI');
+  try {
+    const base = new URL(typeof configured === 'string' ? configured : 'https://social-conversion.neptunebusiness.com/');
+    base.pathname = '/';
+    base.search = `?oauth=instagram-${outcome}`;
+    base.hash = '';
+    return base.toString();
+  } catch {
+    return `https://social-conversion.neptunebusiness.com/?oauth=instagram-${outcome}`;
+  }
+}
+
+async function handleInstagramOAuthCallback(url: URL, env: Env): Promise<Response> {
+  const state = url.searchParams.get('state') ?? '';
+  const code = url.searchParams.get('code') ?? '';
+  if (url.searchParams.has('error') || !state || !code) {
+    return Response.redirect(oauthRedirect(env, 'error'), 302);
+  }
+  try {
+    await completeInstagramOAuth(env.DB, env, { state, code });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: oauthRedirect(env, 'connected'),
+        'cache-control': 'no-store',
+        'referrer-policy': 'no-referrer',
+      },
+    });
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'instagram_oauth_callback_failed',
+      code: error instanceof InstagramOAuthError ? error.code : 'unknown',
+    }));
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: oauthRedirect(env, 'error'),
+        'cache-control': 'no-store',
+        'referrer-policy': 'no-referrer',
+      },
+    });
+  }
+}
+
 async function dispatchPending(env: Env): Promise<number> {
   if (!isLive(env) || !instagramOutboundConfigured(env)) return 0;
   const pending = await listDispatchableOutbound(env.DB, 50);
@@ -194,6 +279,12 @@ const productionWorker = {
     if (url.pathname === '/api/messages' && request.method === 'POST') {
       return handleOutboundApi(request, env);
     }
+    if (url.pathname === '/api/oauth/instagram/start' && request.method === 'POST') {
+      return handleInstagramOAuthStart(request, env);
+    }
+    if (url.pathname === '/oauth/instagram/callback' && request.method === 'GET') {
+      return handleInstagramOAuthCallback(url, env);
+    }
 
     const response = await baseWorker.fetch(request, env, ctx);
     if (url.pathname === '/api/runtime' && request.method === 'GET' && response.ok) {
@@ -203,6 +294,7 @@ const productionWorker = {
         return Response.json({
           ...payload,
           outboundReady: isLive(env) && instagramOutboundConfigured(env),
+          instagramOAuthReady: env.DEMO_MODE !== 'true' && instagramOAuthConfigured(env),
         }, {
           status: response.status,
           headers: response.headers,
@@ -259,6 +351,18 @@ const productionWorker = {
   },
 
   async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    try {
+      const refresh = await refreshExpiringInstagramTokens(env.DB, env);
+      if (refresh.refreshed > 0 || refresh.failed > 0) {
+        console.log(JSON.stringify({ event: 'instagram_oauth_refresh_sweep', ...refresh }));
+      }
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: 'instagram_oauth_refresh_sweep_failed',
+        message: error instanceof Error ? error.message : 'unknown',
+      }));
+    }
+
     try {
       await dispatchPending(env);
     } catch (error) {
