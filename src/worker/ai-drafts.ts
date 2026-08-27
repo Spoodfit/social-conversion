@@ -112,6 +112,21 @@ function mapDraft(row: AiDraftRow) {
   };
 }
 
+function validExpectedVersion(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 1;
+}
+
+function normalizeDraftBody(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new AiDraftError('INVALID_AI_DRAFT', 'body must be a string.');
+  }
+  const body = value.trim();
+  if (!body || body.length > 4_000) {
+    throw new AiDraftError('INVALID_AI_DRAFT', 'body must contain between 1 and 4,000 characters.');
+  }
+  return body;
+}
+
 export async function generateAiReplyDraft(
   db: D1Database,
   env: Env,
@@ -141,7 +156,6 @@ export async function generateAiReplyDraft(
   const messages = [...result.results].reverse();
   if (messages.length === 0) throw new AiDraftError('INVALID_AI_DRAFT', 'A conversation needs at least one message before generating a reply.');
 
-  // Bound the total customer content sent to the provider even when individual messages are unusually large.
   let totalChars = 0;
   const bounded: ContextMessageRow[] = [];
   for (const message of [...messages].reverse()) {
@@ -263,13 +277,48 @@ export async function listAiDrafts(db: D1Database, workspaceId: string, conversa
   return { drafts: result.results.map(mapDraft) };
 }
 
+export async function editAiDraft(
+  db: D1Database,
+  principal: WorkspacePrincipal,
+  id: string,
+  input: { expectedVersion?: unknown; body?: unknown },
+) {
+  if (!validExpectedVersion(input.expectedVersion)) {
+    throw new AiDraftError('INVALID_AI_DRAFT', 'expectedVersion is required for safe editing.');
+  }
+  const body = normalizeDraftBody(input.body);
+  const now = new Date().toISOString();
+  const updated = await db.prepare(
+    `UPDATE ai_drafts
+     SET body = ?, version = version + 1, updated_by = ?, updated_at = ?
+     WHERE id = ? AND workspace_id = ? AND status = 'draft' AND version = ?
+     RETURNING id, conversation_id, body, model, provider_response_id, status, version,
+               source_conversation_updated_at, prompt_message_count, created_at, updated_at`,
+  ).bind(body, principal.subject, now, id, principal.workspaceId, input.expectedVersion).first<AiDraftRow>();
+
+  if (!updated) {
+    const existing = await db.prepare(
+      'SELECT status, version FROM ai_drafts WHERE id = ? AND workspace_id = ?',
+    ).bind(id, principal.workspaceId).first<{ status: string; version: number }>();
+    if (!existing) throw new AiDraftError('AI_DRAFT_NOT_FOUND', 'AI draft not found.');
+    throw new AiDraftError('AI_DRAFT_CONFLICT', 'AI draft changed since it was loaded.');
+  }
+
+  await writeAuditLog(db, principal, 'ai.draft_edited', 'ai_draft', id, {
+    conversationId: updated.conversation_id,
+    version: updated.version,
+    outputLength: body.length,
+  });
+  return mapDraft(updated);
+}
+
 export async function reviewAiDraft(
   db: D1Database,
   principal: WorkspacePrincipal,
   id: string,
   input: { expectedVersion?: unknown; status?: unknown },
 ) {
-  if (!Number.isInteger(input.expectedVersion) || Number(input.expectedVersion) < 1) {
+  if (!validExpectedVersion(input.expectedVersion)) {
     throw new AiDraftError('INVALID_AI_DRAFT', 'expectedVersion is required for safe review.');
   }
   if (input.status !== 'approved' && input.status !== 'rejected') {
