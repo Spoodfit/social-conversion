@@ -499,7 +499,9 @@ export function createApp(
     if (!liveDataReady(c.env)) {
       return c.json({ error: 'Live automation drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
     }
-    const body = await c.req.json<{ expectedVersion?: unknown }>().catch(() => ({}));
+    const body = await c.req
+      .json<{ expectedVersion?: unknown }>()
+      .catch((): { expectedVersion?: unknown } => ({}));
     try {
       await archiveAutomationDraft(c.env.DB, principal, c.req.param('id'), body.expectedVersion);
       return c.body(null, 204);
