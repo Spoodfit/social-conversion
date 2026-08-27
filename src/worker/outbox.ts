@@ -21,6 +21,20 @@ export interface OutboxMessage {
   replayed: boolean;
 }
 
+export interface OutboundDeliveryRecord {
+  id: string;
+  workspaceId: string;
+  conversationId: string;
+  connectionId: string;
+  platform: 'instagram' | 'youtube' | 'tiktok';
+  body: string;
+  providerAccountId: string;
+  recipientExternalId: string;
+  capabilitiesJson: string;
+  attemptCount: number;
+  hasInbound: boolean;
+}
+
 interface ConversationTarget {
   connection_id: string;
   platform: 'instagram' | 'youtube' | 'tiktok';
@@ -37,6 +51,25 @@ interface OutboxRow {
   status: OutboxMessage['status'];
   attempt_count: number;
   created_at: string;
+}
+
+interface DispatchableRow {
+  id: string;
+  workspace_id: string;
+}
+
+interface DeliveryRow {
+  id: string;
+  workspace_id: string;
+  conversation_id: string;
+  connection_id: string;
+  platform: OutboundDeliveryRecord['platform'];
+  body: string;
+  provider_account_id: string | null;
+  recipient_external_id: string;
+  capabilities_json: string;
+  attempt_count: number;
+  has_inbound: number;
 }
 
 const idempotencyPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
@@ -146,6 +179,23 @@ export async function enqueueOutbound(
   return toMessage(row, (insert.meta.changes ?? 0) === 0);
 }
 
+export async function listDispatchableOutbound(
+  db: D1Database,
+  limit = 50,
+): Promise<Array<{ id: string; workspaceId: string }>> {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+  const now = new Date().toISOString();
+  const result = await db.prepare(
+    `SELECT id, workspace_id
+     FROM outbound_messages
+     WHERE status = 'pending'
+        OR (status = 'failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?)
+     ORDER BY created_at ASC, id ASC
+     LIMIT ?`,
+  ).bind(now, safeLimit).all<DispatchableRow>();
+  return result.results.map((row) => ({ id: row.id, workspaceId: row.workspace_id }));
+}
+
 export async function claimOutboundForDelivery(
   db: D1Database,
   id: string,
@@ -165,22 +215,79 @@ export async function claimOutboundForDelivery(
   return (result.meta.changes ?? 0) === 1;
 }
 
+export async function loadOutboundDelivery(
+  db: D1Database,
+  id: string,
+  workspaceId: string,
+): Promise<OutboundDeliveryRecord | undefined> {
+  const row = await db.prepare(
+    `SELECT
+       o.id,
+       o.workspace_id,
+       o.conversation_id,
+       o.connection_id,
+       o.platform,
+       o.body,
+       sc.external_account_id AS provider_account_id,
+       sc.capabilities_json,
+       ct.external_id AS recipient_external_id,
+       o.attempt_count,
+       EXISTS(
+         SELECT 1 FROM messages m
+         WHERE m.conversation_id = o.conversation_id AND m.direction = 'inbound'
+       ) AS has_inbound
+     FROM outbound_messages o
+     JOIN conversations c
+       ON c.id = o.conversation_id AND c.workspace_id = o.workspace_id
+     JOIN contacts ct
+       ON ct.id = c.contact_id AND ct.workspace_id = o.workspace_id
+     JOIN social_connections sc
+       ON sc.id = o.connection_id AND sc.workspace_id = o.workspace_id
+     WHERE o.id = ? AND o.workspace_id = ? AND o.status = 'sending'`,
+  ).bind(id, workspaceId).first<DeliveryRow>();
+  if (!row || !row.provider_account_id) return undefined;
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    conversationId: row.conversation_id,
+    connectionId: row.connection_id,
+    platform: row.platform,
+    body: row.body,
+    providerAccountId: row.provider_account_id,
+    recipientExternalId: row.recipient_external_id,
+    capabilitiesJson: row.capabilities_json,
+    attemptCount: row.attempt_count,
+    hasInbound: row.has_inbound === 1,
+  };
+}
+
 export async function markOutboundSent(
   db: D1Database,
   input: { id: string; workspaceId: string; providerMessageId: string },
 ): Promise<boolean> {
   const now = new Date().toISOString();
-  const result = await db
-    .prepare(
+  const results = await db.batch([
+    db.prepare(
       `UPDATE outbound_messages
        SET status = 'sent', provider_message_id = ?, sent_at = ?,
            last_error_code = NULL, last_error_at = NULL, next_attempt_at = NULL,
            updated_at = ?
        WHERE id = ? AND workspace_id = ? AND status = 'sending'`,
-    )
-    .bind(input.providerMessageId, now, now, input.id, input.workspaceId)
-    .run();
-  return (result.meta.changes ?? 0) === 1;
+    ).bind(input.providerMessageId, now, now, input.id, input.workspaceId),
+    db.prepare(
+      `INSERT OR IGNORE INTO messages
+        (id, conversation_id, external_id, direction, message_type, body, status, ai_assisted, sent_at, created_at)
+       SELECT 'outbound:' || id, conversation_id, ?, 'outbound', 'message', body, 'sent', 0, ?, ?
+       FROM outbound_messages
+       WHERE id = ? AND workspace_id = ? AND status = 'sent'`,
+    ).bind(input.providerMessageId, now, now, input.id, input.workspaceId),
+    db.prepare(
+      `UPDATE conversations
+       SET last_message_at = ?, updated_at = ?
+       WHERE id = (SELECT conversation_id FROM outbound_messages WHERE id = ? AND workspace_id = ?)`
+    ).bind(now, now, input.id, input.workspaceId),
+  ]);
+  return (results[0]?.meta.changes ?? 0) === 1;
 }
 
 export async function markOutboundFailed(
