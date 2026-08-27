@@ -4,6 +4,13 @@ import { demoData } from '../shared/demo-data';
 import { extractMetaExternalAccountIds, normalizeMetaWebhook } from '../shared/events';
 import type { NormalizedSocialEvent, SocialConnectionIdentity } from '../shared/types';
 import {
+  AiDraftError,
+  generateAiReplyDraft,
+  listAiDrafts,
+  liveAiReady,
+  reviewAiDraft,
+} from './ai-drafts';
+import {
   AutomationError,
   archiveAutomationDraft,
   createAutomationDraft,
@@ -200,6 +207,18 @@ function automationErrorResponse(error: AutomationError) {
   return { status: 409 as const, payload: { error: error.message, code: error.code } };
 }
 
+function aiErrorResponse(error: AiDraftError) {
+  if (error.code === 'INVALID_AI_DRAFT') return { status: 400 as const, payload: { error: error.message, code: error.code } };
+  if (error.code === 'CONVERSATION_NOT_FOUND' || error.code === 'AI_DRAFT_NOT_FOUND') {
+    return { status: 404 as const, payload: { error: error.message, code: error.code } };
+  }
+  if (error.code === 'AI_NOT_READY') return { status: 503 as const, payload: { error: error.message, code: error.code } };
+  if (error.code === 'AI_PROVIDER_FAILED' || error.code === 'AI_EMPTY_RESPONSE') {
+    return { status: 502 as const, payload: { error: error.message, code: error.code } };
+  }
+  return { status: 409 as const, payload: { error: error.message, code: error.code } };
+}
+
 export function createApp(
   dependencies: AppDependencies = { verifyAccessToken },
 ): Hono<AppBindings> {
@@ -259,11 +278,12 @@ export function createApp(
 
   app.get('/api/runtime', (c) => {
     const demo = isDemoMode(c.env);
+    const live = !demo && liveRuntimeReady(c.env);
     return c.json({
       mode: demo ? 'demo' : 'live',
       ready: demo || liveRuntimeReady(c.env),
       outboundReady: false,
-      aiReady: false,
+      aiReady: live && liveAiReady(c.env),
       automationReady: false,
     });
   });
@@ -514,6 +534,43 @@ export function createApp(
     }
   });
 
+  app.get('/api/ai/drafts', async (c) => {
+    if (!liveDataReady(c.env)) return c.json({ error: 'Live AI drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
+    const conversationId = c.req.query('conversationId');
+    if (!conversationId) return c.json({ error: 'conversationId is required.', code: 'INVALID_AI_DRAFT' }, 400);
+    const principal = c.get('principal');
+    try {
+      return c.json(await listAiDrafts(c.env.DB, principal.workspaceId, conversationId));
+    } catch (error) {
+      if (error instanceof AiDraftError) {
+        const mapped = aiErrorResponse(error);
+        return c.json(mapped.payload, mapped.status);
+      }
+      throw error;
+    }
+  });
+
+  app.patch('/api/ai/drafts/:id', async (c) => {
+    const principal = c.get('principal');
+    if (!roleCanMutate(principal.role)) {
+      return c.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, 403);
+    }
+    if (!liveDataReady(c.env)) return c.json({ error: 'Live AI drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
+    const body = await c.req
+      .json<{ expectedVersion?: unknown; status?: unknown }>()
+      .catch((): { expectedVersion?: unknown; status?: unknown } => ({}));
+    try {
+      const draft = await reviewAiDraft(c.env.DB, principal, c.req.param('id'), body);
+      return c.json({ draft });
+    } catch (error) {
+      if (error instanceof AiDraftError) {
+        const mapped = aiErrorResponse(error);
+        return c.json(mapped.payload, mapped.status);
+      }
+      throw error;
+    }
+  });
+
   app.post('/api/messages', async (c) => {
     const principal = c.get('principal');
     if (!roleCanMutate(principal.role)) {
@@ -550,22 +607,34 @@ export function createApp(
     }
 
     const body = await c.req
-      .json<{ intent?: string; name?: string }>()
-      .catch((): { intent?: string; name?: string } => ({}));
+      .json<{ conversationId?: string; intent?: string; name?: string }>()
+      .catch((): { conversationId?: string; intent?: string; name?: string } => ({}));
 
-    if (!isDemoMode(c.env)) {
-      return c.json({
-        error: 'AI provider is not configured for live use.',
-        code: 'AI_NOT_READY',
-      }, 503);
+    if (isDemoMode(c.env)) {
+      const firstName = body.name?.trim().split(/\s+/)[0] || 'vous';
+      const suggestion = `Avec plaisir ${firstName}. Pour vous orienter vers le bon format, préférez-vous rencontrer de futurs clients ou des partenaires ?`;
+      await writeAuditLog(c.env.DB, principal, 'ai.demo_suggestion', 'conversation', undefined, {
+        hasIntent: Boolean(body.intent?.trim()),
+      });
+      return c.json({ suggestion, mode: 'draft', generatedBy: 'demo-policy' });
     }
 
-    const firstName = body.name?.trim().split(/\s+/)[0] || 'vous';
-    const suggestion = `Avec plaisir ${firstName}. Pour vous orienter vers le bon format, préférez-vous rencontrer de futurs clients ou des partenaires ?`;
-    await writeAuditLog(c.env.DB, principal, 'ai.demo_suggestion', 'conversation', undefined, {
-      hasIntent: Boolean(body.intent?.trim()),
-    });
-    return c.json({ suggestion, mode: 'draft', generatedBy: 'demo-policy' });
+    if (!liveRuntimeReady(c.env)) {
+      return c.json({ error: 'Live AI drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
+    }
+    if (!body.conversationId) {
+      return c.json({ error: 'conversationId is required.', code: 'INVALID_AI_DRAFT' }, 400);
+    }
+    try {
+      const draft = await generateAiReplyDraft(c.env.DB, c.env, principal, body.conversationId);
+      return c.json({ draft }, 201);
+    } catch (error) {
+      if (error instanceof AiDraftError) {
+        const mapped = aiErrorResponse(error);
+        return c.json(mapped.payload, mapped.status);
+      }
+      throw error;
+    }
   });
 
   app.get('/webhooks/meta', async (c) => {
