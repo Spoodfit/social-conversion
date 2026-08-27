@@ -84,17 +84,16 @@ export async function deliverInstagramOutbound(
   envelope: OutboundDeliveryEnvelope,
   fetchImpl: typeof fetch = fetch,
 ): Promise<'sent' | 'failed' | 'skipped'> {
-  const version = graphVersion(env);
-  const keyring = tokenKeyringSecret(env);
-  if (!version || !keyring) {
-    throw new InstagramDeliveryError('OUTBOUND_CONFIG_NOT_READY', 'Instagram outbound configuration is incomplete.');
-  }
-
   const delivery = await loadOutboundDelivery(db, envelope.id, envelope.workspaceId);
   if (!delivery) return 'skipped';
 
   let failure: InstagramDeliveryError | undefined;
   try {
+    const version = graphVersion(env);
+    const keyring = tokenKeyringSecret(env);
+    if (!version || !keyring) {
+      throw new InstagramDeliveryError('OUTBOUND_CONFIG_NOT_READY', 'Instagram outbound configuration is incomplete.');
+    }
     if (delivery.platform !== 'instagram') {
       throw new InstagramDeliveryError('UNSUPPORTED_PLATFORM', 'Only Instagram outbound is enabled in the current production pilot.');
     }
