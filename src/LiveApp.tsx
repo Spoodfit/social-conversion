@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronRight, CircleUserRound, LoaderCircle, MessageCircle, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  CircleUserRound,
+  LoaderCircle,
+  MessageCircle,
+  RefreshCw,
+  ShieldCheck,
+  UsersRound,
+} from 'lucide-react';
 import { ApiError, apiRequest } from './api/client';
 import './live-app.css';
 
@@ -10,10 +20,16 @@ export interface LiveRuntimeState {
   aiReady: boolean;
 }
 
+type WorkspaceRole = 'admin' | 'manager' | 'agent' | 'viewer';
+type SocialPlatform = 'instagram' | 'youtube' | 'tiktok';
+type LeadStage = 'Nouveau' | 'Qualifié' | 'Rendez-vous' | 'Proposition' | 'Gagné' | 'Perdu';
+
+const leadStages: LeadStage[] = ['Nouveau', 'Qualifié', 'Rendez-vous', 'Proposition', 'Gagné', 'Perdu'];
+
 interface WorkspaceSummary {
   id: string;
   name: string;
-  role: 'admin' | 'manager' | 'agent' | 'viewer';
+  role: WorkspaceRole;
   status: 'invited' | 'active';
 }
 
@@ -23,13 +39,13 @@ interface SessionPayload {
   workspace: {
     id: string;
     name: string;
-    role: WorkspaceSummary['role'];
+    role: WorkspaceRole;
   };
 }
 
 interface LiveConnection {
   id: string;
-  platform: 'instagram' | 'youtube' | 'tiktok';
+  platform: SocialPlatform;
   displayName: string;
   handle?: string;
   status: string;
@@ -40,7 +56,7 @@ interface LiveConversation {
   id: string;
   contactName: string;
   handle?: string;
-  platform: 'instagram' | 'youtube' | 'tiktok';
+  platform: SocialPlatform;
   status: string;
   priority: string;
   leadStage: string;
@@ -49,7 +65,7 @@ interface LiveConversation {
 }
 
 interface LiveBootstrap {
-  workspace: { id: string; name: string; role: WorkspaceSummary['role'] };
+  workspace: { id: string; name: string; role: WorkspaceRole };
   metrics: {
     contacts: number;
     openConversations: number;
@@ -60,19 +76,86 @@ interface LiveBootstrap {
   recentConversations: LiveConversation[];
 }
 
+interface InboxConversation extends LiveConversation {
+  accountName: string;
+  intent?: string;
+  sentiment?: string;
+  assignedTo?: string;
+  updatedAt: string;
+  latestMessage?: {
+    body: string;
+    direction: 'inbound' | 'outbound' | null;
+    type: string;
+    sentAt: string;
+  };
+}
+
+interface PageInfo {
+  limit: number;
+  hasMore: boolean;
+  nextCursor?: string;
+}
+
+interface InboxPayload {
+  conversations: InboxConversation[];
+  page: PageInfo;
+}
+
+interface ConversationMessage {
+  id: string;
+  externalId?: string;
+  direction: 'inbound' | 'outbound';
+  type: string;
+  body: string;
+  status: string;
+  aiAssisted: boolean;
+  sentAt: string;
+  createdAt: string;
+}
+
+interface MessagesPayload {
+  conversationId: string;
+  messages: ConversationMessage[];
+  page: PageInfo;
+}
+
+interface CrmPatchPayload {
+  conversation: {
+    id: string;
+    leadStage: string;
+    estimatedValueCents: number;
+    priority: string;
+    assignedTo?: string;
+    updatedAt: string;
+  };
+}
+
 function readableError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'WORKSPACE_FORBIDDEN') return 'Vous n’avez pas accès à cet espace.';
     if (error.code === 'LIVE_NOT_READY') return 'L’environnement live est encore verrouillé.';
+    if (error.code === 'CONVERSATION_CONFLICT') return 'Cette conversation a été modifiée ailleurs. Les données ont été rechargées.';
     return error.message;
   }
   return 'Une erreur inattendue empêche le chargement.';
 }
 
-function platformLabel(platform: LiveConnection['platform']) {
+function platformLabel(platform: SocialPlatform) {
   if (platform === 'instagram') return 'Instagram';
   if (platform === 'youtube') return 'YouTube';
   return 'TikTok';
+}
+
+function shortDate(value?: string) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
@@ -80,9 +163,19 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
   const [workspaceId, setWorkspaceId] = useState<string>();
   const [session, setSession] = useState<SessionPayload>();
   const [bootstrap, setBootstrap] = useState<LiveBootstrap>();
+  const [inbox, setInbox] = useState<InboxPayload>();
   const [workspaceError, setWorkspaceError] = useState<string>();
   const [dataError, setDataError] = useState<string>();
+  const [inboxError, setInboxError] = useState<string>();
   const [refreshIndex, setRefreshIndex] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState<string>();
+  const [messages, setMessages] = useState<MessagesPayload>();
+  const [messagesError, setMessagesError] = useState<string>();
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesLoadingMore, setMessagesLoadingMore] = useState(false);
+  const [crmBusy, setCrmBusy] = useState(false);
+  const [crmError, setCrmError] = useState<string>();
 
   useEffect(() => {
     let active = true;
@@ -105,27 +198,148 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
     let active = true;
     setSession(undefined);
     setBootstrap(undefined);
+    setInbox(undefined);
     setDataError(undefined);
+    setInboxError(undefined);
+    setSelectedConversationId(undefined);
+    setMessages(undefined);
     window.localStorage.setItem('social-conversion.workspace', workspaceId);
 
     Promise.all([
       apiRequest<SessionPayload>('/api/session', {}, workspaceId),
       apiRequest<LiveBootstrap>('/api/bootstrap', {}, workspaceId),
+      apiRequest<InboxPayload>('/api/inbox/conversations?limit=25', {}, workspaceId),
     ])
-      .then(([nextSession, nextBootstrap]) => {
+      .then(([nextSession, nextBootstrap, nextInbox]) => {
         if (!active) return;
         setSession(nextSession);
         setBootstrap(nextBootstrap);
+        setInbox(nextInbox);
       })
       .catch((error) => active && setDataError(readableError(error)));
 
     return () => { active = false; };
   }, [workspaceId, refreshIndex]);
 
+  useEffect(() => {
+    if (!workspaceId || !selectedConversationId) {
+      setMessages(undefined);
+      setMessagesError(undefined);
+      return undefined;
+    }
+    let active = true;
+    setMessages(undefined);
+    setMessagesError(undefined);
+    setMessagesLoading(true);
+    apiRequest<MessagesPayload>(
+      `/api/inbox/conversations/${encodeURIComponent(selectedConversationId)}/messages?limit=50`,
+      {},
+      workspaceId,
+    )
+      .then((payload) => active && setMessages(payload))
+      .catch((error) => active && setMessagesError(readableError(error)))
+      .finally(() => active && setMessagesLoading(false));
+    return () => { active = false; };
+  }, [workspaceId, selectedConversationId]);
+
   const selectedWorkspace = useMemo(
     () => workspaces?.find((workspace) => workspace.id === workspaceId),
     [workspaces, workspaceId],
   );
+
+  const selectedConversation = useMemo(
+    () => inbox?.conversations.find((conversation) => conversation.id === selectedConversationId),
+    [inbox, selectedConversationId],
+  );
+
+  async function loadMoreInbox() {
+    if (!workspaceId || !inbox?.page.hasMore || !inbox.page.nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setInboxError(undefined);
+    try {
+      const next = await apiRequest<InboxPayload>(
+        `/api/inbox/conversations?limit=${inbox.page.limit}&cursor=${encodeURIComponent(inbox.page.nextCursor)}`,
+        {},
+        workspaceId,
+      );
+      setInbox((current) => current ? {
+        conversations: [...current.conversations, ...next.conversations],
+        page: next.page,
+      } : next);
+    } catch (error) {
+      setInboxError(readableError(error));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  async function loadOlderMessages() {
+    if (!workspaceId || !selectedConversationId || !messages?.page.hasMore || !messages.page.nextCursor || messagesLoadingMore) return;
+    setMessagesLoadingMore(true);
+    setMessagesError(undefined);
+    try {
+      const next = await apiRequest<MessagesPayload>(
+        `/api/inbox/conversations/${encodeURIComponent(selectedConversationId)}/messages?limit=${messages.page.limit}&cursor=${encodeURIComponent(messages.page.nextCursor)}`,
+        {},
+        workspaceId,
+      );
+      setMessages((current) => current ? {
+        conversationId: current.conversationId,
+        messages: [...current.messages, ...next.messages],
+        page: next.page,
+      } : next);
+    } catch (error) {
+      setMessagesError(readableError(error));
+    } finally {
+      setMessagesLoadingMore(false);
+    }
+  }
+
+  async function changeStage(nextStage: LeadStage) {
+    if (!workspaceId || !selectedConversation || !session || session.workspace.role === 'viewer' || crmBusy) return;
+    setCrmBusy(true);
+    setCrmError(undefined);
+    try {
+      const result = await apiRequest<CrmPatchPayload>(
+        `/api/crm/conversations/${encodeURIComponent(selectedConversation.id)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedUpdatedAt: selectedConversation.updatedAt,
+            leadStage: nextStage,
+          }),
+        },
+        workspaceId,
+      );
+      setInbox((current) => current ? {
+        ...current,
+        conversations: current.conversations.map((conversation) => conversation.id === result.conversation.id
+          ? {
+            ...conversation,
+            leadStage: result.conversation.leadStage,
+            estimatedValueCents: result.conversation.estimatedValueCents,
+            priority: result.conversation.priority,
+            assignedTo: result.conversation.assignedTo,
+            updatedAt: result.conversation.updatedAt,
+          }
+          : conversation),
+      } : current);
+      const freshBootstrap = await apiRequest<LiveBootstrap>('/api/bootstrap', {}, workspaceId);
+      setBootstrap(freshBootstrap);
+    } catch (error) {
+      setCrmError(readableError(error));
+      if (error instanceof ApiError && error.code === 'CONVERSATION_CONFLICT') {
+        try {
+          const refreshed = await apiRequest<InboxPayload>('/api/inbox/conversations?limit=25', {}, workspaceId);
+          setInbox(refreshed);
+        } catch {
+          // The original concurrency error remains visible. Never hide it with stale local data.
+        }
+      }
+    } finally {
+      setCrmBusy(false);
+    }
+  }
 
   if (workspaceError) {
     return <LiveState title="Accès impossible" body={workspaceError} danger />;
@@ -170,7 +384,7 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
     );
   }
 
-  if (!session || !bootstrap) {
+  if (!session || !bootstrap || !inbox) {
     return <LiveState title={`Ouverture de ${selectedWorkspace?.name ?? 'votre espace'}`} body="Chargement des données réelles…" loading />;
   }
 
@@ -235,19 +449,97 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
           </article>
 
           <article className="live-panel">
-            <div className="live-panel-heading"><div><span className="live-kicker">Inbox</span><h2>Conversations récentes</h2></div><MessageCircle size={19} /></div>
-            {bootstrap.recentConversations.length ? (
-              <div className="live-list">
-                {bootstrap.recentConversations.map((conversation) => (
-                  <div key={conversation.id} className="live-list-row">
-                    <span><strong>{conversation.contactName}</strong><small>{platformLabel(conversation.platform)} · {conversation.leadStage}</small></span>
-                    <span>{(conversation.estimatedValueCents / 100).toLocaleString('fr-FR')} €</span>
+            <div className="live-panel-heading"><div><span className="live-kicker">Inbox live</span><h2>Conversations</h2></div><MessageCircle size={19} /></div>
+            {inbox.conversations.length ? (
+              <>
+                <div className="live-list live-conversation-list">
+                  {inbox.conversations.map((conversation) => (
+                    <button
+                      key={conversation.id}
+                      className={`live-conversation-row ${conversation.id === selectedConversationId ? 'active' : ''}`}
+                      onClick={() => setSelectedConversationId(conversation.id)}
+                    >
+                      <span className="live-conversation-main">
+                        <strong>{conversation.contactName}</strong>
+                        <small>{conversation.latestMessage?.body || 'Aucun message'}</small>
+                      </span>
+                      <span className="live-conversation-meta">
+                        <strong>{conversation.leadStage}</strong>
+                        <small>{platformLabel(conversation.platform)} · {shortDate(conversation.latestMessage?.sentAt ?? conversation.lastMessageAt)}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {inboxError && <div className="live-inline-error">{inboxError}</div>}
+                {inbox.page.hasMore && (
+                  <div className="live-panel-footer">
+                    <button className="live-secondary" disabled={loadingMore} onClick={loadMoreInbox}>
+                      {loadingMore ? <LoaderCircle className="live-spin" size={15} /> : null}
+                      Charger plus
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : <Empty text="Aucune conversation réelle n’a encore été reçue." />}
           </article>
         </section>
+
+        {selectedConversation && (
+          <section className="live-conversation-detail">
+            <article className="live-panel">
+              <div className="live-panel-heading live-detail-heading">
+                <div>
+                  <span className="live-kicker">Conversation</span>
+                  <h2>{selectedConversation.contactName}</h2>
+                  <small>{selectedConversation.handle || 'Sans handle'} · {platformLabel(selectedConversation.platform)} · {selectedConversation.accountName}</small>
+                </div>
+                <label className="live-stage-control">
+                  <span>Étape CRM</span>
+                  <select
+                    value={selectedConversation.leadStage}
+                    disabled={crmBusy || session.workspace.role === 'viewer'}
+                    onChange={(event) => void changeStage(event.target.value as LeadStage)}
+                  >
+                    {leadStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              <div className="live-conversation-summary">
+                <span><small>Valeur estimée</small><strong>{(selectedConversation.estimatedValueCents / 100).toLocaleString('fr-FR')} €</strong></span>
+                <span><small>Priorité</small><strong>{selectedConversation.priority}</strong></span>
+                <span><small>Intention</small><strong>{selectedConversation.intent || 'Non qualifiée'}</strong></span>
+                <span><small>Dernière activité</small><strong>{shortDate(selectedConversation.lastMessageAt)}</strong></span>
+              </div>
+
+              {crmError && <div className="live-inline-error">{crmError}</div>}
+
+              <div className="live-messages">
+                {messagesLoading && <div className="live-empty"><LoaderCircle className="live-spin" size={18} /> Chargement de l’historique…</div>}
+                {messagesError && <div className="live-inline-error">{messagesError}</div>}
+                {messages?.page.hasMore && (
+                  <button className="live-older-button" disabled={messagesLoadingMore} onClick={loadOlderMessages}>
+                    {messagesLoadingMore ? 'Chargement…' : 'Afficher les messages plus anciens'}
+                  </button>
+                )}
+                {messages && [...messages.messages].reverse().map((message) => (
+                  <div key={message.id} className={`live-message ${message.direction}`}>
+                    <div>{message.body}</div>
+                    <small>{message.direction === 'outbound' ? 'Neptune' : selectedConversation.contactName} · {shortDate(message.sentAt)}{message.aiAssisted ? ' · assisté IA' : ''}</small>
+                  </div>
+                ))}
+                {messages && messages.messages.length === 0 && <Empty text="Aucun message dans cette conversation." />}
+              </div>
+
+              {!runtime.outboundReady && (
+                <div className="live-outbound-lock">
+                  <ShieldCheck size={17} />
+                  <span><strong>Réponse désactivée</strong><small>Le champ d’envoi apparaîtra uniquement après validation du connecteur social réel.</small></span>
+                </div>
+              )}
+            </article>
+          </section>
+        )}
       </main>
     </div>
   );
