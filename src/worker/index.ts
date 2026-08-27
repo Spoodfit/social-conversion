@@ -131,6 +131,10 @@ async function loadLiveBootstrap(db: D1Database, principal: WorkspacePrincipal) 
     ).bind(principal.workspaceId),
   ]);
 
+  if (!connectionsResult || !contactsResult || !conversationsResult || !pipelineResult || !recentResult) {
+    throw new Error('Live bootstrap D1 batch returned an incomplete result set.');
+  }
+
   const connections = connectionsResult.results as unknown as LiveConnectionRow[];
   const recentConversations = recentResult.results as unknown as LiveConversationRow[];
   const contacts = Number((contactsResult.results[0] as { count?: number } | undefined)?.count ?? 0);
