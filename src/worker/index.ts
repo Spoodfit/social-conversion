@@ -3,6 +3,13 @@ import { secureHeaders } from 'hono/secure-headers';
 import { demoData } from '../shared/demo-data';
 import { extractMetaExternalAccountIds, normalizeMetaWebhook } from '../shared/events';
 import type { NormalizedSocialEvent, SocialConnectionIdentity } from '../shared/types';
+import {
+  AutomationError,
+  archiveAutomationDraft,
+  createAutomationDraft,
+  listAutomationDrafts,
+  updateAutomationDraft,
+} from './automations';
 import { getAccessConfig, verifyAccessToken, type AccessIdentity, type AccessTokenVerifier } from './auth';
 import {
   listWorkspaceMemberships,
@@ -120,7 +127,7 @@ async function loadLiveBootstrap(db: D1Database, principal: WorkspacePrincipal) 
     db.prepare(
       `SELECT COALESCE(SUM(estimated_value_cents), 0) AS total
        FROM conversations
-       WHERE workspace_id = ? AND lead_stage <> 'Gagné'`,
+       WHERE workspace_id = ? AND lead_stage NOT IN ('Gagné', 'Perdu')`,
     ).bind(principal.workspaceId),
     db.prepare(
       `SELECT
@@ -183,6 +190,14 @@ async function loadLiveBootstrap(db: D1Database, principal: WorkspacePrincipal) 
       lastMessageAt: conversation.last_message_at ?? undefined,
     })),
   };
+}
+
+function automationErrorResponse(error: AutomationError) {
+  if (error.code === 'INVALID_AUTOMATION') return { status: 400 as const, payload: { error: error.message, code: error.code } };
+  if (error.code === 'CONNECTION_NOT_FOUND' || error.code === 'AUTOMATION_NOT_FOUND') {
+    return { status: 404 as const, payload: { error: error.message, code: error.code } };
+  }
+  return { status: 409 as const, payload: { error: error.message, code: error.code } };
 }
 
 export function createApp(
@@ -249,6 +264,7 @@ export function createApp(
       ready: demo || liveRuntimeReady(c.env),
       outboundReady: false,
       aiReady: false,
+      automationReady: false,
     });
   });
 
@@ -409,6 +425,88 @@ export function createApp(
         if (error.code === 'CONVERSATION_CONFLICT') {
           return c.json({ error: error.message, code: error.code }, 409);
         }
+      }
+      throw error;
+    }
+  });
+
+  app.get('/api/automations', async (c) => {
+    if (!liveDataReady(c.env)) {
+      return c.json({ error: 'Live automation drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
+    }
+    const principal = c.get('principal');
+    try {
+      return c.json(await listAutomationDrafts(c.env.DB, principal.workspaceId, {
+        connectionId: c.req.query('connectionId'),
+        platform: c.req.query('platform'),
+      }));
+    } catch (error) {
+      if (error instanceof AutomationError) {
+        const mapped = automationErrorResponse(error);
+        return c.json(mapped.payload, mapped.status);
+      }
+      throw error;
+    }
+  });
+
+  app.post('/api/automations', async (c) => {
+    const principal = c.get('principal');
+    if (!roleCanMutate(principal.role)) {
+      return c.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, 403);
+    }
+    if (!liveDataReady(c.env)) {
+      return c.json({ error: 'Live automation drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
+    }
+    const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+    try {
+      const automation = await createAutomationDraft(c.env.DB, principal, body);
+      return c.json({ automation }, 201);
+    } catch (error) {
+      if (error instanceof AutomationError) {
+        const mapped = automationErrorResponse(error);
+        return c.json(mapped.payload, mapped.status);
+      }
+      throw error;
+    }
+  });
+
+  app.patch('/api/automations/:id', async (c) => {
+    const principal = c.get('principal');
+    if (!roleCanMutate(principal.role)) {
+      return c.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, 403);
+    }
+    if (!liveDataReady(c.env)) {
+      return c.json({ error: 'Live automation drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
+    }
+    const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+    try {
+      const automation = await updateAutomationDraft(c.env.DB, principal, c.req.param('id'), body);
+      return c.json({ automation });
+    } catch (error) {
+      if (error instanceof AutomationError) {
+        const mapped = automationErrorResponse(error);
+        return c.json(mapped.payload, mapped.status);
+      }
+      throw error;
+    }
+  });
+
+  app.delete('/api/automations/:id', async (c) => {
+    const principal = c.get('principal');
+    if (!roleCanMutate(principal.role)) {
+      return c.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, 403);
+    }
+    if (!liveDataReady(c.env)) {
+      return c.json({ error: 'Live automation drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
+    }
+    const body = await c.req.json<{ expectedVersion?: unknown }>().catch(() => ({}));
+    try {
+      await archiveAutomationDraft(c.env.DB, principal, c.req.param('id'), body.expectedVersion);
+      return c.body(null, 204);
+    } catch (error) {
+      if (error instanceof AutomationError) {
+        const mapped = automationErrorResponse(error);
+        return c.json(mapped.payload, mapped.status);
       }
       throw error;
     }
