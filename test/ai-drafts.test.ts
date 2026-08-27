@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkspacePrincipal } from '../src/worker/authorization';
 import {
+  editAiDraft,
   generateAiReplyDraft,
   listAiDrafts,
   reviewAiDraft,
@@ -123,6 +124,57 @@ describe('AI reply drafts', () => {
     ).bind(workspaceId, draft.id).first<{ metadata_json: string }>();
     expect(audit?.metadata_json).not.toContain('Avec plaisir');
     expect(audit?.metadata_json).not.toContain('test-openai-secret-never-persist');
+  });
+
+  it('persists human edits, increments versions and rejects stale edit/review attempts', async () => {
+    await seedConversation('ai-edit');
+    const actor = principal('ai-editor');
+    const generated = await generateAiReplyDraft(
+      env.DB,
+      aiEnv(),
+      actor,
+      'ai-edit',
+      successfulFetch('Réponse IA initiale à retravailler.'),
+    );
+
+    const edited = await editAiDraft(env.DB, actor, generated.id, {
+      expectedVersion: 1,
+      body: 'Réponse relue et corrigée par un humain.',
+    });
+    expect(edited).toMatchObject({
+      id: generated.id,
+      body: 'Réponse relue et corrigée par un humain.',
+      status: 'draft',
+      version: 2,
+    });
+
+    await expect(editAiDraft(env.DB, actor, generated.id, {
+      expectedVersion: 1,
+      body: 'Écrasement obsolète interdit.',
+    })).rejects.toMatchObject({ code: 'AI_DRAFT_CONFLICT' });
+
+    await expect(reviewAiDraft(env.DB, actor, generated.id, {
+      expectedVersion: 1,
+      status: 'approved',
+    })).rejects.toMatchObject({ code: 'AI_DRAFT_CONFLICT' });
+
+    const approved = await reviewAiDraft(env.DB, actor, generated.id, {
+      expectedVersion: 2,
+      status: 'approved',
+    });
+    expect(approved).toMatchObject({
+      body: 'Réponse relue et corrigée par un humain.',
+      status: 'approved',
+      version: 3,
+    });
+
+    const audit = await env.DB.prepare(
+      `SELECT action, metadata_json FROM audit_logs
+       WHERE workspace_id = ? AND resource_id = ? AND action = 'ai.draft_edited'
+       ORDER BY created_at DESC LIMIT 1`,
+    ).bind(workspaceId, generated.id).first<{ action: string; metadata_json: string }>();
+    expect(audit?.action).toBe('ai.draft_edited');
+    expect(audit?.metadata_json).not.toContain('Réponse relue');
   });
 
   it('requires a fresh human approval and rejects stale drafts after the conversation changes', async () => {
