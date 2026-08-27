@@ -5,6 +5,7 @@ import { extractMetaExternalAccountIds, normalizeMetaWebhook } from '../shared/e
 import type { NormalizedSocialEvent, SocialConnectionIdentity } from '../shared/types';
 import {
   AiDraftError,
+  editAiDraft,
   generateAiReplyDraft,
   listAiDrafts,
   liveAiReady,
@@ -557,10 +558,15 @@ export function createApp(
     }
     if (!liveDataReady(c.env)) return c.json({ error: 'Live AI drafts are locked.', code: 'LIVE_NOT_READY' }, 503);
     const body = await c.req
-      .json<{ expectedVersion?: unknown; status?: unknown }>()
-      .catch((): { expectedVersion?: unknown; status?: unknown } => ({}));
+      .json<{ expectedVersion?: unknown; status?: unknown; body?: unknown }>()
+      .catch((): { expectedVersion?: unknown; status?: unknown; body?: unknown } => ({}));
+    if (body.body !== undefined && body.status !== undefined) {
+      return c.json({ error: 'Edit and review must be separate operations.', code: 'INVALID_AI_DRAFT' }, 400);
+    }
     try {
-      const draft = await reviewAiDraft(c.env.DB, principal, c.req.param('id'), body);
+      const draft = body.body !== undefined
+        ? await editAiDraft(c.env.DB, principal, c.req.param('id'), body)
+        : await reviewAiDraft(c.env.DB, principal, c.req.param('id'), body);
       return c.json({ draft });
     } catch (error) {
       if (error instanceof AiDraftError) {
