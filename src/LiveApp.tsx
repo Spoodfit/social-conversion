@@ -23,6 +23,7 @@ export interface LiveRuntimeState {
 type WorkspaceRole = 'admin' | 'manager' | 'agent' | 'viewer';
 type SocialPlatform = 'instagram' | 'youtube' | 'tiktok';
 type LeadStage = 'Nouveau' | 'Qualifié' | 'Rendez-vous' | 'Proposition' | 'Gagné' | 'Perdu';
+type AiDraftStatus = 'draft' | 'approved' | 'rejected';
 
 const leadStages: LeadStage[] = ['Nouveau', 'Qualifié', 'Rendez-vous', 'Proposition', 'Gagné', 'Perdu'];
 
@@ -130,11 +131,35 @@ interface CrmPatchPayload {
   };
 }
 
+interface AiDraft {
+  id: string;
+  conversationId: string;
+  body: string;
+  model: string;
+  status: AiDraftStatus;
+  version: number;
+  promptMessageCount: number;
+  sourceConversationUpdatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AiDraftsPayload {
+  drafts: AiDraft[];
+}
+
+interface AiDraftPayload {
+  draft: AiDraft;
+}
+
 function readableError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'WORKSPACE_FORBIDDEN') return 'Vous n’avez pas accès à cet espace.';
     if (error.code === 'LIVE_NOT_READY') return 'L’environnement live est encore verrouillé.';
     if (error.code === 'CONVERSATION_CONFLICT') return 'Cette conversation a été modifiée ailleurs. Les données ont été rechargées.';
+    if (error.code === 'AI_DRAFT_CONFLICT') return 'Ce brouillon a été modifié ailleurs. Rechargez sa dernière version avant de continuer.';
+    if (error.code === 'AI_DRAFT_STALE') return 'La conversation a changé depuis la génération. Créez un nouveau brouillon avant approbation.';
+    if (error.code === 'AI_NOT_READY') return 'Le fournisseur IA n’est pas configuré pour cet environnement.';
     return error.message;
   }
   return 'Une erreur inattendue empêche le chargement.';
@@ -158,6 +183,12 @@ function shortDate(value?: string) {
   }).format(date);
 }
 
+function draftStatusLabel(status: AiDraftStatus) {
+  if (status === 'approved') return 'Approuvé';
+  if (status === 'rejected') return 'Rejeté';
+  return 'À relire';
+}
+
 export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>();
   const [workspaceId, setWorkspaceId] = useState<string>();
@@ -176,6 +207,13 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
   const [messagesLoadingMore, setMessagesLoadingMore] = useState(false);
   const [crmBusy, setCrmBusy] = useState(false);
   const [crmError, setCrmError] = useState<string>();
+  const [aiDrafts, setAiDrafts] = useState<AiDraft[]>([]);
+  const [activeAiDraftId, setActiveAiDraftId] = useState<string>();
+  const [aiDraftBody, setAiDraftBody] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string>();
+  const [aiNotice, setAiNotice] = useState<string>();
 
   useEffect(() => {
     let active = true;
@@ -203,6 +241,9 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
     setInboxError(undefined);
     setSelectedConversationId(undefined);
     setMessages(undefined);
+    setAiDrafts([]);
+    setActiveAiDraftId(undefined);
+    setAiDraftBody('');
     window.localStorage.setItem('social-conversion.workspace', workspaceId);
 
     Promise.all([
@@ -242,6 +283,36 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
     return () => { active = false; };
   }, [workspaceId, selectedConversationId]);
 
+  useEffect(() => {
+    if (!workspaceId || !selectedConversationId) {
+      setAiDrafts([]);
+      setActiveAiDraftId(undefined);
+      setAiDraftBody('');
+      setAiError(undefined);
+      setAiNotice(undefined);
+      return undefined;
+    }
+    let active = true;
+    setAiLoading(true);
+    setAiError(undefined);
+    setAiNotice(undefined);
+    apiRequest<AiDraftsPayload>(
+      `/api/ai/drafts?conversationId=${encodeURIComponent(selectedConversationId)}`,
+      {},
+      workspaceId,
+    )
+      .then((payload) => {
+        if (!active) return;
+        setAiDrafts(payload.drafts);
+        const selected = payload.drafts.find((draft) => draft.status === 'draft') ?? payload.drafts[0];
+        setActiveAiDraftId(selected?.id);
+        setAiDraftBody(selected?.body ?? '');
+      })
+      .catch((error) => active && setAiError(readableError(error)))
+      .finally(() => active && setAiLoading(false));
+    return () => { active = false; };
+  }, [workspaceId, selectedConversationId]);
+
   const selectedWorkspace = useMemo(
     () => workspaces?.find((workspace) => workspace.id === workspaceId),
     [workspaces, workspaceId],
@@ -251,6 +322,45 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
     () => inbox?.conversations.find((conversation) => conversation.id === selectedConversationId),
     [inbox, selectedConversationId],
   );
+
+  const activeAiDraft = useMemo(
+    () => aiDrafts.find((draft) => draft.id === activeAiDraftId),
+    [aiDrafts, activeAiDraftId],
+  );
+
+  function selectAiDraft(id: string) {
+    const draft = aiDrafts.find((candidate) => candidate.id === id);
+    setActiveAiDraftId(id);
+    setAiDraftBody(draft?.body ?? '');
+    setAiError(undefined);
+    setAiNotice(undefined);
+  }
+
+  function applyAiDraft(draft: AiDraft) {
+    setAiDrafts((current) => {
+      const exists = current.some((candidate) => candidate.id === draft.id);
+      return exists
+        ? current.map((candidate) => candidate.id === draft.id ? draft : candidate)
+        : [draft, ...current];
+    });
+    setActiveAiDraftId(draft.id);
+    setAiDraftBody(draft.body);
+  }
+
+  async function reloadAiDrafts() {
+    if (!workspaceId || !selectedConversationId) return;
+    const payload = await apiRequest<AiDraftsPayload>(
+      `/api/ai/drafts?conversationId=${encodeURIComponent(selectedConversationId)}`,
+      {},
+      workspaceId,
+    );
+    setAiDrafts(payload.drafts);
+    const selected = payload.drafts.find((draft) => draft.id === activeAiDraftId)
+      ?? payload.drafts.find((draft) => draft.status === 'draft')
+      ?? payload.drafts[0];
+    setActiveAiDraftId(selected?.id);
+    setAiDraftBody(selected?.body ?? '');
+  }
 
   async function loadMoreInbox() {
     if (!workspaceId || !inbox?.page.hasMore || !inbox.page.nextCursor || loadingMore) return;
@@ -341,6 +451,99 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
     }
   }
 
+  async function generateAiDraft() {
+    if (!workspaceId || !selectedConversation || !session || session.workspace.role === 'viewer' || !runtime.aiReady || aiBusy) return;
+    setAiBusy(true);
+    setAiError(undefined);
+    setAiNotice(undefined);
+    try {
+      const result = await apiRequest<AiDraftPayload>(
+        '/api/ai/suggest',
+        {
+          method: 'POST',
+          body: JSON.stringify({ conversationId: selectedConversation.id }),
+        },
+        workspaceId,
+      );
+      applyAiDraft(result.draft);
+      setAiNotice('Brouillon généré. Relisez-le avant toute approbation.');
+    } catch (error) {
+      setAiError(readableError(error));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function persistAiDraftBody(draft: AiDraft, body: string): Promise<AiDraft> {
+    if (!workspaceId) throw new Error('Workspace missing.');
+    const result = await apiRequest<AiDraftPayload>(
+      `/api/ai/drafts/${encodeURIComponent(draft.id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ expectedVersion: draft.version, body }),
+      },
+      workspaceId,
+    );
+    applyAiDraft(result.draft);
+    return result.draft;
+  }
+
+  async function saveAiDraft() {
+    if (!activeAiDraft || activeAiDraft.status !== 'draft' || !session || session.workspace.role === 'viewer' || aiBusy) return;
+    const nextBody = aiDraftBody.trim();
+    if (!nextBody || nextBody.length > 4_000 || nextBody === activeAiDraft.body) return;
+    setAiBusy(true);
+    setAiError(undefined);
+    setAiNotice(undefined);
+    try {
+      await persistAiDraftBody(activeAiDraft, nextBody);
+      setAiNotice('Modification enregistrée et versionnée.');
+    } catch (error) {
+      setAiError(readableError(error));
+      if (error instanceof ApiError && error.code === 'AI_DRAFT_CONFLICT') {
+        try { await reloadAiDrafts(); } catch { /* Keep the original conflict visible. */ }
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function reviewCurrentAiDraft(status: 'approved' | 'rejected') {
+    if (!workspaceId || !activeAiDraft || activeAiDraft.status !== 'draft' || !session || session.workspace.role === 'viewer' || aiBusy) return;
+    setAiBusy(true);
+    setAiError(undefined);
+    setAiNotice(undefined);
+    try {
+      let target = activeAiDraft;
+      const editedBody = aiDraftBody.trim();
+      if (status === 'approved' && editedBody !== target.body) {
+        if (!editedBody || editedBody.length > 4_000) {
+          throw new ApiError('Le brouillon doit contenir entre 1 et 4 000 caractères.', 400, 'INVALID_AI_DRAFT');
+        }
+        target = await persistAiDraftBody(target, editedBody);
+      }
+      const result = await apiRequest<AiDraftPayload>(
+        `/api/ai/drafts/${encodeURIComponent(target.id)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ expectedVersion: target.version, status }),
+        },
+        workspaceId,
+      );
+      applyAiDraft(result.draft);
+      setAiNotice(status === 'approved'
+        ? 'Brouillon approuvé. Aucun message n’a été envoyé.'
+        : 'Brouillon rejeté. Aucun message n’a été envoyé.');
+    } catch (error) {
+      setAiError(readableError(error));
+      if (error instanceof ApiError && (error.code === 'AI_DRAFT_CONFLICT' || error.code === 'AI_DRAFT_STALE')) {
+        try { await reloadAiDrafts(); } catch { /* Keep the original error visible. */ }
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   if (workspaceError) {
     return <LiveState title="Accès impossible" body={workspaceError} danger />;
   }
@@ -418,7 +621,7 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
           </div>
           <div className={runtime.aiReady ? 'ready' : 'blocked'}>
             {runtime.aiReady ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-            <span><strong>Copilote IA</strong><small>{runtime.aiReady ? 'Fournisseur IA prêt' : 'Aucune suggestion fictive ne sera générée'}</small></span>
+            <span><strong>Copilote IA</strong><small>{runtime.aiReady ? 'Fournisseur IA prêt · validation humaine obligatoire' : 'Génération bloquée · les brouillons existants restent consultables'}</small></span>
           </div>
           <div className="ready">
             <ShieldCheck size={18} />
@@ -529,6 +732,102 @@ export default function LiveApp({ runtime }: { runtime: LiveRuntimeState }) {
                   </div>
                 ))}
                 {messages && messages.messages.length === 0 && <Empty text="Aucun message dans cette conversation." />}
+              </div>
+
+              <div className="live-ai-review">
+                <div className="live-ai-heading">
+                  <div>
+                    <span className="live-kicker">Copilote IA</span>
+                    <strong>Brouillon avec validation humaine</strong>
+                    <small>Générer ou approuver un brouillon ne déclenche jamais l’envoi.</small>
+                  </div>
+                  <button
+                    className="live-secondary"
+                    disabled={!runtime.aiReady || session.workspace.role === 'viewer' || aiBusy}
+                    onClick={() => void generateAiDraft()}
+                  >
+                    {aiBusy ? <LoaderCircle className="live-spin" size={15} /> : null}
+                    Proposer une réponse IA
+                  </button>
+                </div>
+
+                {aiError && <div className="live-inline-error">{aiError}</div>}
+                {aiNotice && <div className="live-inline-notice">{aiNotice}</div>}
+                {aiLoading && <div className="live-empty"><LoaderCircle className="live-spin" size={17} /> Chargement des brouillons…</div>}
+
+                {!aiLoading && aiDrafts.length > 0 && (
+                  <div className="live-ai-editor">
+                    <label className="live-ai-select">
+                      <span>Version à consulter</span>
+                      <select value={activeAiDraftId ?? ''} onChange={(event) => selectAiDraft(event.target.value)}>
+                        {aiDrafts.map((draft) => (
+                          <option key={draft.id} value={draft.id}>
+                            {draftStatusLabel(draft.status)} · v{draft.version} · {shortDate(draft.updatedAt)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {activeAiDraft && (
+                      <>
+                        <div className="live-ai-meta">
+                          <span className={`live-ai-badge ${activeAiDraft.status}`}>{draftStatusLabel(activeAiDraft.status)}</span>
+                          <small>{activeAiDraft.model} · v{activeAiDraft.version} · contexte {activeAiDraft.promptMessageCount} message(s)</small>
+                        </div>
+                        <textarea
+                          value={aiDraftBody}
+                          maxLength={4000}
+                          disabled={activeAiDraft.status !== 'draft' || session.workspace.role === 'viewer' || aiBusy}
+                          onChange={(event) => {
+                            setAiDraftBody(event.target.value);
+                            setAiNotice(undefined);
+                          }}
+                          aria-label="Brouillon de réponse IA"
+                        />
+                        <div className="live-ai-footer">
+                          <small>{aiDraftBody.length.toLocaleString('fr-FR')} / 4 000 caractères</small>
+                          {activeAiDraft.status === 'draft' ? (
+                            <div className="live-ai-actions">
+                              <button
+                                className="live-secondary"
+                                disabled={session.workspace.role === 'viewer' || aiBusy || !aiDraftBody.trim() || aiDraftBody.trim() === activeAiDraft.body}
+                                onClick={() => void saveAiDraft()}
+                              >
+                                Enregistrer
+                              </button>
+                              <button
+                                className="live-secondary live-danger-button"
+                                disabled={session.workspace.role === 'viewer' || aiBusy}
+                                onClick={() => void reviewCurrentAiDraft('rejected')}
+                              >
+                                Rejeter
+                              </button>
+                              <button
+                                className="live-primary live-approve-button"
+                                disabled={session.workspace.role === 'viewer' || aiBusy || !aiDraftBody.trim()}
+                                onClick={() => void reviewCurrentAiDraft('approved')}
+                              >
+                                Approuver sans envoyer
+                              </button>
+                            </div>
+                          ) : (
+                            <strong className="live-ai-final-state">
+                              {activeAiDraft.status === 'approved' ? 'Approuvé — non envoyé' : 'Rejeté — non envoyé'}
+                            </strong>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {!aiLoading && aiDrafts.length === 0 && (
+                  <div className="live-empty">
+                    {runtime.aiReady
+                      ? 'Aucun brouillon pour cette conversation.'
+                      : 'Aucun brouillon existant et génération IA non configurée.'}
+                  </div>
+                )}
               </div>
 
               {!runtime.outboundReady && (
