@@ -1,12 +1,27 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import LiveApp, { type LiveRuntimeState } from './LiveApp';
 import './styles.css';
+
+const DemoApp = lazy(() => import('./App'));
 
 type RuntimeState = {
   mode: 'demo' | 'live';
   ready: boolean;
+  outboundReady: boolean;
+  aiReady: boolean;
 };
+
+function FullPageState({ title, body }: { title: string; body: string }) {
+  return (
+    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#f6f7fb', color: '#161823', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <section style={{ maxWidth: 600 }}>
+        <strong>{title}</strong>
+        <p>{body}</p>
+      </section>
+    </main>
+  );
+}
 
 function RuntimeGate() {
   const uiOnly = import.meta.env.VITE_UI_ONLY === 'true';
@@ -26,16 +41,16 @@ function RuntimeGate() {
     return () => { active = false; };
   }, [uiOnly]);
 
-  if (uiOnly) return <App />;
+  if (uiOnly) {
+    return <Suspense fallback={<FullPageState title="Chargement de la démo" body="Initialisation de l’interface locale…" />}><DemoApp /></Suspense>;
+  }
 
   if (failed) {
     return (
-      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#f6f7fb', color: '#161823', fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <section style={{ maxWidth: 560 }}>
-          <strong>Social Conversion indisponible</strong>
-          <p>Le runtime n’a pas pu être vérifié. Aucune donnée de démonstration n’est affichée à la place d’un environnement indisponible.</p>
-        </section>
-      </main>
+      <FullPageState
+        title="Social Conversion indisponible"
+        body="Le runtime n’a pas pu être vérifié. Aucune donnée de démonstration n’est affichée à la place d’un environnement indisponible."
+      />
     );
   }
 
@@ -45,16 +60,22 @@ function RuntimeGate() {
 
   if (runtime.mode === 'live' && !runtime.ready) {
     return (
-      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#f6f7fb', color: '#161823', fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <section style={{ maxWidth: 600 }}>
-          <strong>Environnement live verrouillé</strong>
-          <p>Les connecteurs sociaux et les sources de données production ne sont pas encore validés. Le mode live reste volontairement inaccessible pour éviter toute simulation présentée comme réelle.</p>
-        </section>
-      </main>
+      <FullPageState
+        title="Environnement live verrouillé"
+        body="Les connecteurs sociaux et les sources de données production ne sont pas encore validés. Le mode live reste volontairement inaccessible pour éviter toute simulation présentée comme réelle."
+      />
     );
   }
 
-  return <App />;
+  if (runtime.mode === 'live') {
+    return <LiveApp runtime={runtime as LiveRuntimeState} />;
+  }
+
+  return (
+    <Suspense fallback={<FullPageState title="Chargement de la démo" body="Initialisation de l’interface de démonstration…" />}>
+      <DemoApp />
+    </Suspense>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(
