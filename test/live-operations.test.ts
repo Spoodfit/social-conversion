@@ -79,7 +79,7 @@ describe('OAuth token vault', () => {
     await expect(decryptToken(keyring('v2'), encryptedV2, context)).resolves.toBe('rotated-token');
   });
 
-  it('stores only ciphertext in D1, loads scoped credentials and revokes them', async () => {
+  it('stores only ciphertext, preserves refresh tokens across access-key rotation and supports revocation', async () => {
     const connectionId = 'connection-vault-storage';
     await insertConnection(connectionId, 'ig-vault-storage');
 
@@ -91,14 +91,18 @@ describe('OAuth token vault', () => {
       refreshToken: 'refresh-token-must-never-be-plaintext-in-d1',
       scopes: ['messages', 'comments', 'messages'],
       accessExpiresAt: '2026-10-01T00:00:00.000Z',
+      refreshExpiresAt: '2027-08-27T00:00:00.000Z',
     });
 
     const stored = await env.DB.prepare(
-      `SELECT access_token_ciphertext, refresh_token_ciphertext, scopes_json, revoked_at
+      `SELECT access_token_ciphertext, refresh_token_ciphertext,
+              access_key_version, refresh_key_version, scopes_json, revoked_at
        FROM oauth_credentials WHERE connection_id = ?`,
     ).bind(connectionId).first<{
       access_token_ciphertext: string;
       refresh_token_ciphertext: string;
+      access_key_version: string;
+      refresh_key_version: string;
       scopes_json: string;
       revoked_at: string | null;
     }>();
@@ -106,11 +110,12 @@ describe('OAuth token vault', () => {
     expect(stored).toBeTruthy();
     expect(stored?.access_token_ciphertext).not.toContain('access-token-must-never-be-plaintext-in-d1');
     expect(stored?.refresh_token_ciphertext).not.toContain('refresh-token-must-never-be-plaintext-in-d1');
+    expect(stored).toMatchObject({ access_key_version: 'v1', refresh_key_version: 'v1' });
     expect(JSON.parse(stored?.scopes_json ?? '[]')).toEqual(['comments', 'messages']);
     expect(stored?.revoked_at).toBeNull();
 
-    const loaded = await loadOAuthTokens(env.DB, keyring('v2'), 'default', connectionId);
-    expect(loaded).toMatchObject({
+    const initialLoaded = await loadOAuthTokens(env.DB, keyring('v2'), 'default', connectionId);
+    expect(initialLoaded).toMatchObject({
       accessToken: 'access-token-must-never-be-plaintext-in-d1',
       refreshToken: 'refresh-token-must-never-be-plaintext-in-d1',
       credentials: {
@@ -118,6 +123,41 @@ describe('OAuth token vault', () => {
         connectionId,
         provider: 'instagram',
         scopes: ['comments', 'messages'],
+        refreshExpiresAt: '2027-08-27T00:00:00.000Z',
+      },
+    });
+
+    await saveOAuthCredentials(env.DB, keyring('v2'), {
+      workspaceId: 'default',
+      connectionId,
+      provider: 'instagram',
+      accessToken: 'rotated-access-token-v2',
+      accessExpiresAt: '2026-11-01T00:00:00.000Z',
+    });
+
+    const rotatedMetadata = await env.DB.prepare(
+      `SELECT access_key_version, refresh_key_version, scopes_json, refresh_expires_at
+       FROM oauth_credentials WHERE connection_id = ?`,
+    ).bind(connectionId).first<{
+      access_key_version: string;
+      refresh_key_version: string;
+      scopes_json: string;
+      refresh_expires_at: string | null;
+    }>();
+    expect(rotatedMetadata).toMatchObject({
+      access_key_version: 'v2',
+      refresh_key_version: 'v1',
+      refresh_expires_at: '2027-08-27T00:00:00.000Z',
+    });
+    expect(JSON.parse(rotatedMetadata?.scopes_json ?? '[]')).toEqual(['comments', 'messages']);
+
+    const rotatedLoaded = await loadOAuthTokens(env.DB, keyring('v2'), 'default', connectionId);
+    expect(rotatedLoaded).toMatchObject({
+      accessToken: 'rotated-access-token-v2',
+      refreshToken: 'refresh-token-must-never-be-plaintext-in-d1',
+      credentials: {
+        scopes: ['comments', 'messages'],
+        refreshExpiresAt: '2027-08-27T00:00:00.000Z',
       },
     });
 
