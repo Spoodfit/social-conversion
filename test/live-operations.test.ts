@@ -8,7 +8,6 @@ import {
   saveOAuthCredentials,
 } from '../src/worker/token-vault';
 import {
-  OutboxError,
   claimOutboundForDelivery,
   enqueueOutbound,
   markOutboundFailed,
@@ -159,7 +158,7 @@ describe('outbound transactional boundary', () => {
       idempotencyKey: 'idem-message-0001',
       body: 'Un autre message sous la même clé',
       actorId: 'actor-1',
-    })).rejects.toMatchObject<Partial<OutboxError>>({ code: 'IDEMPOTENCY_CONFLICT' });
+    })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
 
     const count = await env.DB.prepare(
       'SELECT COUNT(*) AS count FROM outbound_messages WHERE workspace_id = ? AND idempotency_key = ?',
