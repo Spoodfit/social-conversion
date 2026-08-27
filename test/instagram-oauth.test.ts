@@ -54,8 +54,10 @@ async function principal(): Promise<WorkspacePrincipal> {
   };
 }
 
-function oauthFetch() {
+function oauthFetch(accountId: string, username: string, suffix: string) {
   let call = 0;
+  const shortToken = `IGAA-short-secret-${suffix}`;
+  const longToken = `IGAA-long-secret-never-store-plaintext-${suffix}`;
   return vi.fn<typeof fetch>(async (input, init) => {
     call += 1;
     const url = String(input);
@@ -65,22 +67,22 @@ function oauthFetch() {
       const form = new URLSearchParams(String(init?.body));
       expect(form.get('client_secret')).toBe('instagram-test-app-secret-never-store');
       expect(form.get('code')).toBe('oauth-code-test');
-      return Response.json({ access_token: 'IGAA-short-secret', user_id: 17890001234567890 });
+      return Response.json({ access_token: shortToken, user_id: accountId });
     }
     if (call === 2) {
       expect(url).toContain('https://graph.instagram.com/access_token?');
       const parsed = new URL(url);
       expect(parsed.searchParams.get('grant_type')).toBe('ig_exchange_token');
-      expect(parsed.searchParams.get('access_token')).toBe('IGAA-short-secret');
-      return Response.json({ access_token: 'IGAA-long-secret-never-store-plaintext', expires_in: 5_184_000 });
+      expect(parsed.searchParams.get('access_token')).toBe(shortToken);
+      return Response.json({ access_token: longToken, expires_in: 5_184_000 });
     }
     if (call === 3) {
       expect(url).toBe('https://graph.instagram.com/v24.0/me?fields=user_id,username');
-      expect((init?.headers as Record<string, string>).authorization).toBe('Bearer IGAA-long-secret-never-store-plaintext');
-      return Response.json({ user_id: '17890001234567890', username: 'neptune_test' });
+      expect((init?.headers as Record<string, string>).authorization).toBe(`Bearer ${longToken}`);
+      return Response.json({ user_id: accountId, username });
     }
     if (call === 4) {
-      expect(url).toBe('https://graph.instagram.com/v24.0/17890001234567890/subscribed_apps');
+      expect(url).toBe(`https://graph.instagram.com/v24.0/${accountId}/subscribed_apps`);
       const body = JSON.parse(String(init?.body)) as { subscribed_fields: string[] };
       expect(body.subscribed_fields).toEqual(['messages', 'messaging_postbacks', 'comments']);
       return Response.json({ success: true });
@@ -102,7 +104,7 @@ describe('Instagram Business Login OAuth', () => {
     const state = authUrl.searchParams.get('state');
     expect(state).toBeTruthy();
 
-    const fetchMock = oauthFetch();
+    const fetchMock = oauthFetch('17890001234567890', 'neptune_test', 'first');
     const completed = await completeInstagramOAuth(env.DB, oauthEnv(), {
       state: String(state),
       code: 'oauth-code-test',
@@ -134,12 +136,12 @@ describe('Instagram Business Login OAuth', () => {
     const stored = await env.DB.prepare(
       `SELECT access_token_ciphertext, scopes_json, revoked_at FROM oauth_credentials WHERE connection_id = ?`,
     ).bind(started.connectionId).first<{ access_token_ciphertext: string; scopes_json: string; revoked_at: string | null }>();
-    expect(stored?.access_token_ciphertext).not.toContain('IGAA-long-secret-never-store-plaintext');
+    expect(stored?.access_token_ciphertext).not.toContain('IGAA-long-secret-never-store-plaintext-first');
     expect(JSON.parse(stored?.scopes_json ?? '[]')).toContain('instagram_business_manage_messages');
     expect(stored?.revoked_at).toBeNull();
 
     const loaded = await loadOAuthTokens(env.DB, keyring(), 'default', started.connectionId);
-    expect(loaded?.accessToken).toBe('IGAA-long-secret-never-store-plaintext');
+    expect(loaded?.accessToken).toBe('IGAA-long-secret-never-store-plaintext-first');
 
     const secondFetch = vi.fn<typeof fetch>();
     await expect(completeInstagramOAuth(env.DB, oauthEnv(), {
@@ -153,7 +155,7 @@ describe('Instagram Business Login OAuth', () => {
     const actor = await principal();
     const started = await startInstagramOAuth(env.DB, oauthEnv(), actor);
     const state = new URL(started.url).searchParams.get('state') ?? '';
-    const baseFetch = oauthFetch();
+    const baseFetch = oauthFetch('17890001234567891', 'neptune_test_subscription', 'subscription');
     let call = 0;
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       call += 1;
@@ -179,7 +181,12 @@ describe('Instagram Business Login OAuth', () => {
     const actor = await principal();
     const started = await startInstagramOAuth(env.DB, oauthEnv(), actor);
     const state = new URL(started.url).searchParams.get('state') ?? '';
-    await completeInstagramOAuth(env.DB, oauthEnv(), { state, code: 'oauth-code-test' }, oauthFetch());
+    await completeInstagramOAuth(
+      env.DB,
+      oauthEnv(),
+      { state, code: 'oauth-code-test' },
+      oauthFetch('17890001234567892', 'neptune_test_refresh', 'refresh'),
+    );
     await env.DB.prepare(
       `UPDATE oauth_credentials
        SET access_expires_at = '2026-08-30T12:00:00.000Z',
@@ -191,7 +198,7 @@ describe('Instagram Business Login OAuth', () => {
       const url = new URL(String(input));
       expect(url.origin + url.pathname).toBe('https://graph.instagram.com/refresh_access_token');
       expect(url.searchParams.get('grant_type')).toBe('ig_refresh_token');
-      expect(url.searchParams.get('access_token')).toBe('IGAA-long-secret-never-store-plaintext');
+      expect(url.searchParams.get('access_token')).toBe('IGAA-long-secret-never-store-plaintext-refresh');
       return Response.json({ access_token: 'IGAA-refreshed-secret', expires_in: 5_184_000 });
     });
     const result = await refreshExpiringInstagramTokens(env.DB, oauthEnv(), refreshFetch);
