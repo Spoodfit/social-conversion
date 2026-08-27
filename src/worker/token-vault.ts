@@ -34,6 +34,18 @@ export interface StoredOAuthCredentials {
   revokedAt?: string;
 }
 
+interface CredentialMetadataRow {
+  id: string;
+  workspace_id: string;
+  connection_id: string;
+  provider: OAuthProvider;
+  scopes_json: string;
+  access_expires_at: string | null;
+  refresh_expires_at: string | null;
+  last_refreshed_at: string | null;
+  revoked_at: string | null;
+}
+
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -60,6 +72,15 @@ function base64ToBytes(value: string): Uint8Array {
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes;
+}
+
+function parseScopes(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((scope): scope is string => typeof scope === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function parseKeyring(raw: string): TokenKeyringDocument {
@@ -218,28 +239,31 @@ export async function saveOAuthCredentials(
 
   const now = new Date().toISOString();
   const id = `oauth:${input.connectionId}`;
-  const scopes = [...new Set((input.scopes ?? []).map((scope) => scope.trim()).filter(Boolean))].sort();
+  const normalizedScopes = input.scopes === undefined
+    ? undefined
+    : [...new Set(input.scopes.map((scope) => scope.trim()).filter(Boolean))].sort();
 
   await db
     .prepare(
       `INSERT INTO oauth_credentials
         (id, workspace_id, connection_id, provider,
-         access_token_ciphertext, access_token_iv,
-         refresh_token_ciphertext, refresh_token_iv,
-         key_version, scopes_json, access_expires_at, refresh_expires_at,
+         access_token_ciphertext, access_token_iv, access_key_version,
+         refresh_token_ciphertext, refresh_token_iv, refresh_key_version,
+         scopes_json, access_expires_at, refresh_expires_at,
          last_refreshed_at, revoked_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
        ON CONFLICT(connection_id) DO UPDATE SET
          workspace_id = excluded.workspace_id,
          provider = excluded.provider,
          access_token_ciphertext = excluded.access_token_ciphertext,
          access_token_iv = excluded.access_token_iv,
-         refresh_token_ciphertext = excluded.refresh_token_ciphertext,
-         refresh_token_iv = excluded.refresh_token_iv,
-         key_version = excluded.key_version,
-         scopes_json = excluded.scopes_json,
+         access_key_version = excluded.access_key_version,
+         refresh_token_ciphertext = COALESCE(excluded.refresh_token_ciphertext, oauth_credentials.refresh_token_ciphertext),
+         refresh_token_iv = COALESCE(excluded.refresh_token_iv, oauth_credentials.refresh_token_iv),
+         refresh_key_version = COALESCE(excluded.refresh_key_version, oauth_credentials.refresh_key_version),
+         scopes_json = CASE WHEN ? = 1 THEN excluded.scopes_json ELSE oauth_credentials.scopes_json END,
          access_expires_at = excluded.access_expires_at,
-         refresh_expires_at = excluded.refresh_expires_at,
+         refresh_expires_at = COALESCE(excluded.refresh_expires_at, oauth_credentials.refresh_expires_at),
          last_refreshed_at = excluded.last_refreshed_at,
          revoked_at = NULL,
          updated_at = excluded.updated_at`,
@@ -251,27 +275,42 @@ export async function saveOAuthCredentials(
       input.provider,
       access.ciphertext,
       access.iv,
+      access.keyVersion,
       refresh?.ciphertext ?? null,
       refresh?.iv ?? null,
-      access.keyVersion,
-      JSON.stringify(scopes),
+      refresh?.keyVersion ?? null,
+      JSON.stringify(normalizedScopes ?? []),
       input.accessExpiresAt ?? null,
       input.refreshExpiresAt ?? null,
       now,
       now,
       now,
+      normalizedScopes === undefined ? 0 : 1,
     )
     .run();
 
+  const metadata = await db
+    .prepare(
+      `SELECT id, workspace_id, connection_id, provider, scopes_json,
+              access_expires_at, refresh_expires_at, last_refreshed_at, revoked_at
+       FROM oauth_credentials
+       WHERE workspace_id = ? AND connection_id = ?`,
+    )
+    .bind(input.workspaceId, input.connectionId)
+    .first<CredentialMetadataRow>();
+
+  if (!metadata) throw new Error('OAuth credentials could not be read back after save.');
+
   return {
-    id,
-    workspaceId: input.workspaceId,
-    connectionId: input.connectionId,
-    provider: input.provider,
-    scopes,
-    accessExpiresAt: input.accessExpiresAt,
-    refreshExpiresAt: input.refreshExpiresAt,
-    lastRefreshedAt: now,
+    id: metadata.id,
+    workspaceId: metadata.workspace_id,
+    connectionId: metadata.connection_id,
+    provider: metadata.provider,
+    scopes: parseScopes(metadata.scopes_json),
+    accessExpiresAt: metadata.access_expires_at ?? undefined,
+    refreshExpiresAt: metadata.refresh_expires_at ?? undefined,
+    lastRefreshedAt: metadata.last_refreshed_at ?? undefined,
+    revokedAt: metadata.revoked_at ?? undefined,
   };
 }
 
@@ -284,9 +323,9 @@ export async function loadOAuthTokens(
   const row = await db
     .prepare(
       `SELECT id, workspace_id, connection_id, provider,
-              access_token_ciphertext, access_token_iv,
-              refresh_token_ciphertext, refresh_token_iv,
-              key_version, scopes_json, access_expires_at, refresh_expires_at,
+              access_token_ciphertext, access_token_iv, access_key_version,
+              refresh_token_ciphertext, refresh_token_iv, refresh_key_version,
+              scopes_json, access_expires_at, refresh_expires_at,
               last_refreshed_at, revoked_at
        FROM oauth_credentials
        WHERE workspace_id = ? AND connection_id = ?`,
@@ -299,9 +338,10 @@ export async function loadOAuthTokens(
       provider: OAuthProvider;
       access_token_ciphertext: string;
       access_token_iv: string;
+      access_key_version: string;
       refresh_token_ciphertext: string | null;
       refresh_token_iv: string | null;
-      key_version: string;
+      refresh_key_version: string | null;
       scopes_json: string;
       access_expires_at: string | null;
       refresh_expires_at: string | null;
@@ -314,7 +354,7 @@ export async function loadOAuthTokens(
   const accessToken = await decryptToken(rawKeyring, {
     ciphertext: row.access_token_ciphertext,
     iv: row.access_token_iv,
-    keyVersion: row.key_version,
+    keyVersion: row.access_key_version,
   }, {
     workspaceId,
     connectionId,
@@ -322,25 +362,21 @@ export async function loadOAuthTokens(
     kind: 'access',
   });
 
-  const refreshToken = row.refresh_token_ciphertext && row.refresh_token_iv
-    ? await decryptToken(rawKeyring, {
+  let refreshToken: string | undefined;
+  if (row.refresh_token_ciphertext || row.refresh_token_iv || row.refresh_key_version) {
+    if (!row.refresh_token_ciphertext || !row.refresh_token_iv || !row.refresh_key_version) {
+      throw new Error('Stored OAuth refresh token metadata is incomplete.');
+    }
+    refreshToken = await decryptToken(rawKeyring, {
       ciphertext: row.refresh_token_ciphertext,
       iv: row.refresh_token_iv,
-      keyVersion: row.key_version,
+      keyVersion: row.refresh_key_version,
     }, {
       workspaceId,
       connectionId,
       provider: row.provider,
       kind: 'refresh',
-    })
-    : undefined;
-
-  let scopes: string[] = [];
-  try {
-    const parsed = JSON.parse(row.scopes_json) as unknown;
-    scopes = Array.isArray(parsed) ? parsed.filter((scope): scope is string => typeof scope === 'string') : [];
-  } catch {
-    scopes = [];
+    });
   }
 
   return {
@@ -351,7 +387,7 @@ export async function loadOAuthTokens(
       workspaceId: row.workspace_id,
       connectionId: row.connection_id,
       provider: row.provider,
-      scopes,
+      scopes: parseScopes(row.scopes_json),
       accessExpiresAt: row.access_expires_at ?? undefined,
       refreshExpiresAt: row.refresh_expires_at ?? undefined,
       lastRefreshedAt: row.last_refreshed_at ?? undefined,
