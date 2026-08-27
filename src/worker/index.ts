@@ -11,6 +11,12 @@ import {
   writeAuditLog,
   type WorkspacePrincipal,
 } from './authorization';
+import {
+  LiveDataError,
+  listConversationMessages,
+  listInboxConversations,
+  updateConversationCrm,
+} from './live-data';
 import { persistSocialEvent } from './persistence';
 import {
   optionalSecret,
@@ -64,6 +70,10 @@ function isDemoMode(env: Env): boolean {
 
 function liveRuntimeReady(env: Env): boolean {
   return String(env.LIVE_READY) === 'true';
+}
+
+function liveDataReady(env: Env): boolean {
+  return !isDemoMode(env) && liveRuntimeReady(env);
 }
 
 async function loadMetaConnections(
@@ -304,6 +314,104 @@ export function createApp(
     }
 
     return c.json(await loadLiveBootstrap(c.env.DB, principal));
+  });
+
+  app.get('/api/inbox/conversations', async (c) => {
+    if (!liveDataReady(c.env)) {
+      return c.json({
+        error: 'Live inbox is locked until live runtime validation is complete.',
+        code: 'LIVE_NOT_READY',
+      }, 503);
+    }
+    const principal = c.get('principal');
+    try {
+      return c.json(await listInboxConversations(c.env.DB, principal.workspaceId, {
+        limit: c.req.query('limit'),
+        cursor: c.req.query('cursor'),
+        platform: c.req.query('platform'),
+        status: c.req.query('status'),
+        stage: c.req.query('stage'),
+      }));
+    } catch (error) {
+      if (error instanceof LiveDataError && (error.code === 'INVALID_QUERY' || error.code === 'INVALID_CURSOR')) {
+        return c.json({ error: error.message, code: error.code }, 400);
+      }
+      throw error;
+    }
+  });
+
+  app.get('/api/inbox/conversations/:id/messages', async (c) => {
+    if (!liveDataReady(c.env)) {
+      return c.json({
+        error: 'Live inbox is locked until live runtime validation is complete.',
+        code: 'LIVE_NOT_READY',
+      }, 503);
+    }
+    const principal = c.get('principal');
+    try {
+      return c.json(await listConversationMessages(c.env.DB, principal.workspaceId, c.req.param('id'), {
+        limit: c.req.query('limit'),
+        cursor: c.req.query('cursor'),
+      }));
+    } catch (error) {
+      if (error instanceof LiveDataError) {
+        if (error.code === 'INVALID_QUERY' || error.code === 'INVALID_CURSOR') {
+          return c.json({ error: error.message, code: error.code }, 400);
+        }
+        if (error.code === 'CONVERSATION_NOT_FOUND') {
+          return c.json({ error: error.message, code: error.code }, 404);
+        }
+      }
+      throw error;
+    }
+  });
+
+  app.patch('/api/crm/conversations/:id', async (c) => {
+    const principal = c.get('principal');
+    if (!roleCanMutate(principal.role)) {
+      return c.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, 403);
+    }
+    if (!liveDataReady(c.env)) {
+      return c.json({
+        error: 'Live CRM mutations are locked until live runtime validation is complete.',
+        code: 'LIVE_NOT_READY',
+      }, 503);
+    }
+
+    const body = await c.req.json<{
+      expectedUpdatedAt?: string;
+      leadStage?: string;
+      estimatedValueCents?: number;
+      priority?: string;
+      assignedTo?: string | null;
+    }>().catch(() => ({}));
+
+    try {
+      const updated = await updateConversationCrm(c.env.DB, principal, c.req.param('id'), body);
+      return c.json({
+        conversation: {
+          id: updated.id,
+          leadStage: updated.lead_stage,
+          estimatedValueCents: updated.estimated_value_cents,
+          priority: updated.priority,
+          assignedTo: updated.assigned_to ?? undefined,
+          updatedAt: updated.updated_at,
+        },
+      });
+    } catch (error) {
+      if (error instanceof LiveDataError) {
+        if (error.code === 'INVALID_MUTATION') {
+          return c.json({ error: error.message, code: error.code }, 400);
+        }
+        if (error.code === 'CONVERSATION_NOT_FOUND') {
+          return c.json({ error: error.message, code: error.code }, 404);
+        }
+        if (error.code === 'CONVERSATION_CONFLICT') {
+          return c.json({ error: error.message, code: error.code }, 409);
+        }
+      }
+      throw error;
+    }
   });
 
   app.post('/api/messages', async (c) => {
