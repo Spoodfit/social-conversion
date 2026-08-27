@@ -3,8 +3,9 @@ import { secureHeaders } from 'hono/secure-headers';
 import { demoData } from '../shared/demo-data';
 import { extractMetaExternalAccountIds, normalizeMetaWebhook } from '../shared/events';
 import type { NormalizedSocialEvent, SocialConnectionIdentity } from '../shared/types';
-import { getAccessConfig, verifyAccessToken, type AccessTokenVerifier } from './auth';
+import { getAccessConfig, verifyAccessToken, type AccessIdentity, type AccessTokenVerifier } from './auth';
 import {
+  listWorkspaceMemberships,
   resolveWorkspaceMembership,
   roleCanMutate,
   writeAuditLog,
@@ -20,7 +21,10 @@ import {
 
 type AppBindings = {
   Bindings: Env;
-  Variables: { principal: WorkspacePrincipal };
+  Variables: {
+    identity: AccessIdentity;
+    principal: WorkspacePrincipal;
+  };
 };
 
 interface AppDependencies {
@@ -31,6 +35,27 @@ interface SocialConnectionRow {
   id: string;
   workspace_id: string;
   external_account_id: string;
+}
+
+interface LiveConnectionRow {
+  id: string;
+  platform: 'instagram' | 'youtube' | 'tiktok';
+  display_name: string;
+  handle: string | null;
+  status: string;
+  last_synced_at: string | null;
+}
+
+interface LiveConversationRow {
+  id: string;
+  contact_name: string;
+  handle: string | null;
+  platform: 'instagram' | 'youtube' | 'tiktok';
+  status: string;
+  priority: string;
+  lead_stage: string;
+  estimated_value_cents: number;
+  last_message_at: string | null;
 }
 
 function isDemoMode(env: Env): boolean {
@@ -62,6 +87,88 @@ async function loadMetaConnections(
     row.external_account_id,
     { id: row.id, workspaceId: row.workspace_id },
   ]));
+}
+
+async function loadLiveBootstrap(db: D1Database, principal: WorkspacePrincipal) {
+  const [connectionsResult, contactsResult, conversationsResult, pipelineResult, recentResult] = await db.batch([
+    db.prepare(
+      `SELECT id, platform, display_name, handle, status, last_synced_at
+       FROM social_connections
+       WHERE workspace_id = ?
+       ORDER BY platform, display_name`,
+    ).bind(principal.workspaceId),
+    db.prepare(
+      `SELECT COUNT(*) AS count
+       FROM contacts
+       WHERE workspace_id = ?`,
+    ).bind(principal.workspaceId),
+    db.prepare(
+      `SELECT COUNT(*) AS count
+       FROM conversations
+       WHERE workspace_id = ? AND status = 'open'`,
+    ).bind(principal.workspaceId),
+    db.prepare(
+      `SELECT COALESCE(SUM(estimated_value_cents), 0) AS total
+       FROM conversations
+       WHERE workspace_id = ? AND lead_stage <> 'Gagné'`,
+    ).bind(principal.workspaceId),
+    db.prepare(
+      `SELECT
+         c.id,
+         ct.display_name AS contact_name,
+         ct.handle,
+         ct.platform,
+         c.status,
+         c.priority,
+         c.lead_stage,
+         c.estimated_value_cents,
+         c.last_message_at
+       FROM conversations c
+       JOIN contacts ct ON ct.id = c.contact_id
+       WHERE c.workspace_id = ?
+       ORDER BY COALESCE(c.last_message_at, c.updated_at) DESC
+       LIMIT 20`,
+    ).bind(principal.workspaceId),
+  ]);
+
+  const connections = connectionsResult.results as unknown as LiveConnectionRow[];
+  const recentConversations = recentResult.results as unknown as LiveConversationRow[];
+  const contacts = Number((contactsResult.results[0] as { count?: number } | undefined)?.count ?? 0);
+  const openConversations = Number((conversationsResult.results[0] as { count?: number } | undefined)?.count ?? 0);
+  const estimatedPipelineCents = Number((pipelineResult.results[0] as { total?: number } | undefined)?.total ?? 0);
+
+  return {
+    workspace: {
+      id: principal.workspaceId,
+      name: principal.workspaceName,
+      role: principal.role,
+    },
+    metrics: {
+      contacts,
+      openConversations,
+      connectedAccounts: connections.filter((connection) => connection.status === 'connected').length,
+      estimatedPipelineCents,
+    },
+    connections: connections.map((connection) => ({
+      id: connection.id,
+      platform: connection.platform,
+      displayName: connection.display_name,
+      handle: connection.handle ?? undefined,
+      status: connection.status,
+      lastSyncedAt: connection.last_synced_at ?? undefined,
+    })),
+    recentConversations: recentConversations.map((conversation) => ({
+      id: conversation.id,
+      contactName: conversation.contact_name,
+      handle: conversation.handle ?? undefined,
+      platform: conversation.platform,
+      status: conversation.status,
+      priority: conversation.priority,
+      leadStage: conversation.lead_stage,
+      estimatedValueCents: conversation.estimated_value_cents,
+      lastMessageAt: conversation.last_message_at ?? undefined,
+    })),
+  };
 }
 
 export function createApp(
@@ -102,7 +209,7 @@ export function createApp(
       return c.json({ error: 'Authentication required.', code: 'ACCESS_TOKEN_MISSING' }, 401);
     }
 
-    let identity;
+    let identity: AccessIdentity;
     try {
       identity = await dependencies.verifyAccessToken(token, accessConfig);
     } catch {
@@ -117,6 +224,27 @@ export function createApp(
       return c.json({ error: 'Too many requests.', code: 'RATE_LIMITED' }, 429);
     }
 
+    c.set('identity', identity);
+    await next();
+  });
+
+  app.get('/api/runtime', (c) => {
+    const demo = isDemoMode(c.env);
+    return c.json({
+      mode: demo ? 'demo' : 'live',
+      ready: demo || liveRuntimeReady(c.env),
+      outboundReady: false,
+      aiReady: false,
+    });
+  });
+
+  app.get('/api/workspaces', async (c) => {
+    const workspaces = await listWorkspaceMemberships(c.env.DB, c.get('identity'));
+    return c.json({ workspaces });
+  });
+
+  app.use('/api/*', async (c, next) => {
+    const identity = c.get('identity');
     const requestedWorkspaceId = c.req.header('x-workspace-id');
     const membership = await resolveWorkspaceMembership(c.env.DB, identity, requestedWorkspaceId);
     if (membership.status === 'workspace_required') {
@@ -152,17 +280,7 @@ export function createApp(
     });
   });
 
-  app.get('/api/runtime', (c) => {
-    const demo = isDemoMode(c.env);
-    return c.json({
-      mode: demo ? 'demo' : 'live',
-      ready: demo || liveRuntimeReady(c.env),
-      outboundReady: false,
-      aiReady: false,
-    });
-  });
-
-  app.get('/api/bootstrap', (c) => {
+  app.get('/api/bootstrap', async (c) => {
     const principal = c.get('principal');
     if (isDemoMode(c.env)) {
       return c.json({
@@ -181,10 +299,7 @@ export function createApp(
       }, 503);
     }
 
-    return c.json({
-      error: 'Live bootstrap is not implemented yet.',
-      code: 'LIVE_BOOTSTRAP_NOT_IMPLEMENTED',
-    }, 501);
+    return c.json(await loadLiveBootstrap(c.env.DB, principal));
   });
 
   app.post('/api/messages', async (c) => {
