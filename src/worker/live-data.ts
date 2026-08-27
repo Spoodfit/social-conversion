@@ -114,7 +114,7 @@ function normalizeLimit(value: string | undefined, fallback = 25, maximum = 50):
 
 function normalizeOptionalFilter<T extends string>(
   value: string | undefined,
-  allowed: Set<T> | Set<string>,
+  allowed: ReadonlySet<string>,
   field: string,
 ): T | undefined {
   if (!value) return undefined;
