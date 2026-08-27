@@ -1,5 +1,6 @@
 META_APP_SECRET="replace-me"
 META_VERIFY_TOKEN="replace-me"
+TOKEN_ENCRYPTION_KEYRING='{"active":"v1","keys":{"v1":"replace-with-base64-encoded-32-byte-key"}}'
 OPENAI_API_KEY="replace-me"
 YOUTUBE_API_KEY="replace-me"
 TIKTOK_CLIENT_SECRET="replace-me"
