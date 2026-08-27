@@ -9,6 +9,13 @@ export interface WorkspacePrincipal extends AccessIdentity {
   memberId: string;
 }
 
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  role: WorkspaceRole;
+  status: 'invited' | 'active';
+}
+
 export type MembershipResolution =
   | { status: 'granted'; principal: WorkspacePrincipal }
   | { status: 'forbidden' }
@@ -32,6 +39,37 @@ export function validWorkspaceId(value: string | undefined): value is string {
 
 export function roleCanMutate(role: WorkspaceRole): boolean {
   return role === 'admin' || role === 'manager' || role === 'agent';
+}
+
+export async function listWorkspaceMemberships(
+  db: D1Database,
+  identity: AccessIdentity,
+): Promise<WorkspaceSummary[]> {
+  const result = await db
+    .prepare(
+      `SELECT
+         wm.workspace_id,
+         w.name AS workspace_name,
+         wm.role,
+         wm.status
+       FROM workspace_members wm
+       JOIN workspaces w ON w.id = wm.workspace_id
+       WHERE (
+         (wm.status = 'active' AND wm.access_subject = ?)
+         OR
+         (wm.status = 'invited' AND wm.access_subject IS NULL AND wm.email = ?)
+       )
+       ORDER BY w.name, wm.workspace_id`,
+    )
+    .bind(identity.subject, identity.email ?? '')
+    .all<Pick<MembershipRow, 'workspace_id' | 'workspace_name' | 'role' | 'status'>>();
+
+  return result.results.map((membership) => ({
+    id: membership.workspace_id,
+    name: membership.workspace_name,
+    role: membership.role,
+    status: membership.status,
+  }));
 }
 
 export async function resolveWorkspaceMembership(
