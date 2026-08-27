@@ -32,10 +32,17 @@ function oauthEnv(): Env {
 
 async function principal(): Promise<WorkspacePrincipal> {
   await env.DB.prepare(
-    `INSERT OR REPLACE INTO workspace_members
+    `INSERT OR IGNORE INTO workspace_members
       (id, workspace_id, access_subject, email, role, status, activated_at, created_at, updated_at)
      VALUES ('oauth-member', 'default', 'oauth-subject', 'oauth@example.test', 'admin', 'active',
              '2026-08-27T15:00:00.000Z', '2026-08-27T15:00:00.000Z', '2026-08-27T15:00:00.000Z')`,
+  ).run();
+  await env.DB.prepare(
+    `UPDATE workspace_members
+     SET access_subject = 'oauth-subject', email = 'oauth@example.test', role = 'admin', status = 'active',
+         activated_at = COALESCE(activated_at, '2026-08-27T15:00:00.000Z'),
+         updated_at = '2026-08-27T15:00:00.000Z'
+     WHERE id = 'oauth-member' AND workspace_id = 'default'`,
   ).run();
   return {
     subject: 'oauth-subject',
