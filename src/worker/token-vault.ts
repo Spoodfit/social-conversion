@@ -34,6 +34,16 @@ export interface StoredOAuthCredentials {
   revokedAt?: string;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+function utf8Buffer(value: string): ArrayBuffer {
+  return toArrayBuffer(encoder.encode(value));
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -80,11 +90,17 @@ function parseKeyring(raw: string): TokenKeyringDocument {
 async function importAesKey(base64Key: string): Promise<CryptoKey> {
   const bytes = base64ToBytes(base64Key);
   if (bytes.byteLength !== 32) throw new Error('Token encryption key must be 32 bytes.');
-  return crypto.subtle.importKey('raw', bytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  return crypto.subtle.importKey(
+    'raw',
+    toArrayBuffer(bytes),
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt'],
+  );
 }
 
-function additionalData(context: TokenContext, keyVersion: string): Uint8Array {
-  return encoder.encode([
+function additionalData(context: TokenContext, keyVersion: string): ArrayBuffer {
+  return utf8Buffer([
     'neptune-social-conversion',
     keyVersion,
     context.workspaceId,
@@ -109,21 +125,21 @@ export async function encryptToken(
   const rawKey = keyring.keys[keyring.active];
   if (!rawKey) throw new Error('Active token encryption key is missing.');
   const key = await importAesKey(rawKey);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ivBytes = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
     {
       name: 'AES-GCM',
-      iv,
+      iv: toArrayBuffer(ivBytes),
       additionalData: additionalData(context, keyring.active),
       tagLength: 128,
     },
     key,
-    encoder.encode(plaintext),
+    utf8Buffer(plaintext),
   );
 
   return {
     ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
-    iv: bytesToBase64(iv),
+    iv: bytesToBase64(ivBytes),
     keyVersion: keyring.active,
   };
 }
@@ -137,20 +153,20 @@ export async function decryptToken(
   const rawKey = keyring.keys[encrypted.keyVersion];
   if (!rawKey) throw new Error(`Token encryption key version ${encrypted.keyVersion} is unavailable.`);
   const key = await importAesKey(rawKey);
-  const iv = base64ToBytes(encrypted.iv);
-  if (iv.byteLength !== 12) throw new Error('OAuth token IV must be 12 bytes.');
-  const ciphertext = base64ToBytes(encrypted.ciphertext);
+  const ivBytes = base64ToBytes(encrypted.iv);
+  if (ivBytes.byteLength !== 12) throw new Error('OAuth token IV must be 12 bytes.');
+  const ciphertextBytes = base64ToBytes(encrypted.ciphertext);
 
   try {
     const plaintext = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
-        iv,
+        iv: toArrayBuffer(ivBytes),
         additionalData: additionalData(context, encrypted.keyVersion),
         tagLength: 128,
       },
       key,
-      ciphertext,
+      toArrayBuffer(ciphertextBytes),
     );
     return decoder.decode(plaintext);
   } catch {
