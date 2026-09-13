@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "neptune-social-conversion",
-  "main": "src/worker/production.ts",
+  "main": "src/worker/cockpit-production.ts",
   "compatibility_date": "2026-08-11",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
