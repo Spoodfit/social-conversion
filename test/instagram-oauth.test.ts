@@ -187,12 +187,16 @@ describe('Instagram Business Login OAuth', () => {
       { state, code: 'oauth-code-test' },
       oauthFetch('17890001234567892', 'neptune_test_refresh', 'refresh'),
     );
+
+    const now = Date.now();
+    const nearExpiry = new Date(now + 3 * 24 * 60 * 60 * 1_000).toISOString();
+    const lastRefreshed = new Date(now - 2 * 24 * 60 * 60 * 1_000).toISOString();
     await env.DB.prepare(
       `UPDATE oauth_credentials
-       SET access_expires_at = '2026-08-30T12:00:00.000Z',
-           last_refreshed_at = '2026-08-25T12:00:00.000Z'
+       SET access_expires_at = ?,
+           last_refreshed_at = ?
        WHERE connection_id = ?`,
-    ).bind(started.connectionId).run();
+    ).bind(nearExpiry, lastRefreshed, started.connectionId).run();
 
     const refreshFetch = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
