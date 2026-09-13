@@ -22,10 +22,10 @@ jobs:
     timeout-minutes: 15
     environment: production
     steps:
-      - name: Check out the validated recovery release
+      - name: Check out the current validated recovery candidate
         uses: actions/checkout@v4
         with:
-          ref: 7b9af9833ea127b6678f125296383375fbaa9250
+          ref: recovery/social-conversion-production
 
       - uses: actions/setup-node@v4
         with:
