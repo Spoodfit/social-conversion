@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import LiveApp, { type LiveRuntimeState } from './LiveApp';
 import './styles.css';
+import './cockpit-live.css';
 
 const DemoApp = lazy(() => import('./App'));
 
@@ -10,6 +11,8 @@ type RuntimeState = {
   ready: boolean;
   outboundReady: boolean;
   aiReady: boolean;
+  publishingSchedulerReady?: boolean;
+  contentPublishingReady?: boolean;
 };
 
 function FullPageState({ title, body }: { title: string; body: string }) {
