@@ -1,479 +1,713 @@
 import {
-  Activity,
-  ArrowDownRight,
-  ArrowRight,
-  ArrowUpRight,
   BarChart3,
-  Bell,
-  Bot,
+  CalendarDays,
   Camera,
   Check,
-  CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   Clock3,
-  Command,
-  Database,
-  Filter,
-  Gauge,
-  KanbanSquare,
+  FileImage,
+  Inbox as InboxIcon,
   Link2,
-  Menu,
   MessageCircle,
-  MoreHorizontal,
   Music2,
   Paperclip,
-  PencilLine,
-  Play,
   Plus,
-  RefreshCw,
   Search,
   Send,
   Settings2,
-  ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
-  Target,
-  TrendingUp,
   Video,
-  UsersRound,
-  WandSparkles,
   X,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { demoData } from './shared/demo-data';
-import type {
-  AutomationRule,
-  BootstrapData,
-  Conversation,
-  Lead,
-  LeadStage,
-  Platform,
-  SocialConnection,
-} from './shared/types';
+import type { Conversation, Platform } from './shared/types';
 
-type Page = 'dashboard' | 'connections' | 'inbox' | 'automations' | 'crm' | 'analytics' | 'settings';
+type Page = 'inbox' | 'publish' | 'calendar' | 'results' | 'more';
+type PublishingPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok' | 'youtube';
+type InboxFilter = 'all' | 'unread' | 'messages' | 'comments';
+type PublishTiming = 'now' | 'later';
 
-const navItems: Array<{ id: Page; label: string; icon: LucideIcon }> = [
-  { id: 'dashboard', label: 'Vue d’ensemble', icon: Gauge },
-  { id: 'connections', label: 'Connexions', icon: Link2 },
-  { id: 'inbox', label: 'Inbox sociale', icon: MessageCircle },
-  { id: 'automations', label: 'Automatisations', icon: Zap },
-  { id: 'crm', label: 'Pipeline CRM', icon: KanbanSquare },
-  { id: 'analytics', label: 'Analyses', icon: BarChart3 },
-  { id: 'settings', label: 'Paramètres IA', icon: Settings2 },
+interface PublishingAccount {
+  id: string;
+  platform: PublishingPlatform;
+  name: string;
+  handle: string;
+  connected: boolean;
+  note?: string;
+}
+
+interface ScheduledPost {
+  id: string;
+  content: string;
+  accountIds: string[];
+  scheduledAt: string;
+  status: 'scheduled' | 'draft';
+  mediaName?: string;
+}
+
+const mainNav: Array<{ id: Exclude<Page, 'more'>; label: string; icon: LucideIcon }> = [
+  { id: 'inbox', label: 'Inbox', icon: InboxIcon },
+  { id: 'publish', label: 'Publier', icon: Plus },
+  { id: 'calendar', label: 'Calendrier', icon: CalendarDays },
+  { id: 'results', label: 'Résultats', icon: BarChart3 },
 ];
 
-const pageTitles: Record<Page, string> = {
-  dashboard: 'Vue d’ensemble',
-  connections: 'Connexions sociales',
-  inbox: 'Inbox sociale',
-  automations: 'Automatisations',
-  crm: 'Pipeline CRM',
-  analytics: 'Analyses de conversion',
-  settings: 'Paramètres IA',
-};
+const publishingAccounts: PublishingAccount[] = [
+  { id: 'ig-main', platform: 'instagram', name: 'Neptune Business', handle: '@neptunebusiness', connected: true },
+  { id: 'ig-media', platform: 'instagram', name: 'Neptune Media', handle: '@neptunemedia', connected: true },
+  { id: 'yt-main', platform: 'youtube', name: 'Neptune Business', handle: '@neptunebusiness', connected: true },
+  { id: 'tt-main', platform: 'tiktok', name: 'Neptune Business', handle: '@neptunebusiness', connected: true },
+  { id: 'fb-main', platform: 'facebook', name: 'Neptune Business', handle: 'Page Facebook', connected: false, note: 'À connecter' },
+  { id: 'li-main', platform: 'linkedin', name: 'Neptune Business', handle: 'Page LinkedIn', connected: false, note: 'À connecter' },
+];
 
-const platformLabels: Record<Platform, string> = {
+const platformLabels: Record<PublishingPlatform, string> = {
   instagram: 'Instagram',
-  youtube: 'YouTube',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
   tiktok: 'TikTok',
+  youtube: 'YouTube',
 };
 
-const metricIcons = [Activity, MessageCircle, Target, TrendingUp];
+const resultRows = [
+  { title: 'Afterwork : on a cassé les codes', platform: 'Instagram', views: '18,4 k', interactions: '1 246', leads: '31' },
+  { title: 'Club d’affaires : les pièges à éviter', platform: 'YouTube', views: '7,8 k', interactions: '412', leads: '18' },
+  { title: 'Les ateliers Neptune en 30 secondes', platform: 'TikTok', views: '26,1 k', interactions: '1 804', leads: '12' },
+];
 
-function MetricIcon({ index }: { index: number }) {
-  const Icon = metricIcons[index] ?? Activity;
-  return <Icon size={19} />;
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-function PlatformIcon({ platform, size = 16 }: { platform: Platform; size?: number }) {
+function tomorrowKey() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return localDateKey(date);
+}
+
+function makeInitialPosts(): ScheduledPost[] {
+  const first = new Date();
+  first.setDate(first.getDate() + 1);
+  first.setHours(10, 0, 0, 0);
+  const second = new Date();
+  second.setDate(second.getDate() + 2);
+  second.setHours(18, 30, 0, 0);
+  return [
+    {
+      id: 'demo-post-1',
+      content: 'Qui a dit qu’un club d’affaires devait être ennuyant ? Prochain afterwork : on vous prouve le contraire.',
+      accountIds: ['ig-main', 'li-main'],
+      scheduledAt: first.toISOString(),
+      status: 'scheduled',
+    },
+    {
+      id: 'demo-post-2',
+      content: 'Une minute pour comprendre comment fonctionne Neptune Business.',
+      accountIds: ['tt-main', 'yt-main'],
+      scheduledAt: second.toISOString(),
+      status: 'scheduled',
+    },
+  ];
+}
+
+function platformIcon(platform: PublishingPlatform | Platform, size = 17) {
   if (platform === 'instagram') return <Camera size={size} />;
   if (platform === 'youtube') return <Video size={size} />;
-  return <Music2 size={size} />;
+  if (platform === 'tiktok') return <Music2 size={size} />;
+  if (platform === 'facebook') return <MessageCircle size={size} />;
+  return <Link2 size={size} />;
 }
 
-function PlatformBadge({ platform, label = true }: { platform: Platform; label?: boolean }) {
+function postKind(conversation: Conversation) {
+  if (conversation.platform === 'youtube' || conversation.id === 'conv-5') return 'comment' as const;
+  return 'message' as const;
+}
+
+function shortScheduleDate(value: string) {
+  const date = new Date(value);
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function AccountMark({ platform }: { platform: PublishingPlatform | Platform }) {
+  return <span className={`platform-mark platform-${platform}`}>{platformIcon(platform)}</span>;
+}
+
+function Toast({ text, onClose }: { text: string; onClose: () => void }) {
   return (
-    <span className={`platform-badge ${platform}`} title={platformLabels[platform]}>
-      <PlatformIcon platform={platform} size={14} />
-      {label && <span>{platformLabels[platform]}</span>}
-    </span>
-  );
-}
-
-function Avatar({ initials, large = false }: { initials: string; large?: boolean }) {
-  return <span className={`avatar ${large ? 'avatar-large' : ''}`}>{initials}</span>;
-}
-
-function Button({
-  children,
-  variant = 'primary',
-  icon: Icon,
-  onClick,
-  type = 'button',
-  disabled,
-  className = '',
-}: {
-  children: ReactNode;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
-  icon?: LucideIcon;
-  onClick?: () => void;
-  type?: 'button' | 'submit';
-  disabled?: boolean;
-  className?: string;
-}) {
-  return (
-    <button type={type} className={`button button-${variant} ${className}`} onClick={onClick} disabled={disabled}>
-      {Icon && <Icon size={16} />}
-      {children}
-    </button>
-  );
-}
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
-  return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`toggle ${checked ? 'on' : ''}`} onClick={onChange}>
-      <span />
-    </button>
-  );
-}
-
-function Modal({ title, eyebrow, onClose, children, wide = false }: { title: string; eyebrow?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className={`modal ${wide ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="modal-heading">
-          <div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2 id="modal-title">{title}</h2></div>
-          <button className="icon-button" onClick={onClose} aria-label="Fermer"><X size={20} /></button>
-        </div>
-        {children}
-      </section>
+    <div className="toast" role="status">
+      <span className="toast-check"><Check size={15} /></span>
+      <span>{text}</span>
+      <button onClick={onClose} aria-label="Fermer"><X size={15} /></button>
     </div>
   );
 }
 
-function EmptyState({ title, body }: { title: string; body: string }) {
-  return <div className="empty-state"><Search size={24} /><strong>{title}</strong><span>{body}</span></div>;
-}
-
-function Dashboard({ data, navigate }: { data: BootstrapData; navigate: (page: Page) => void }) {
-  const hottestLeads = [...data.leads].sort((a, b) => b.score - a.score).slice(0, 3);
-  return (
-    <div className="page-stack">
-      <section className="page-heading-row">
-        <div><p className="page-kicker">Pilotage commercial</p><h1>Bonjour, Neptune 👋</h1><p>Voici ce que vos réseaux ont généré ces 30 derniers jours.</p></div>
-        <div className="heading-actions"><button className="date-control"><Clock3 size={16} /> 30 derniers jours <ChevronDown size={15} /></button><Button icon={RefreshCw} variant="secondary">Actualiser</Button></div>
-      </section>
-
-      <section className="metric-grid" aria-label="Indicateurs clés">
-        {data.metrics.map((metric, index) => (
-          <article className="metric-card" key={metric.label}>
-            <div className={`metric-icon metric-icon-${index + 1}`}><MetricIcon index={index} /></div>
-            <div className="metric-copy"><span>{metric.label}</span><strong>{metric.value}</strong></div>
-            <span className={`delta ${metric.direction}`}>{metric.direction === 'up' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{metric.delta}</span>
-            <small>{metric.detail}</small>
-          </article>
-        ))}
-      </section>
-
-      <section className="dashboard-grid">
-        <article className="panel conversion-panel">
-          <div className="panel-heading"><div><span className="eyebrow">Parcours social</span><h2>Entonnoir de conversion</h2></div><button className="text-button" onClick={() => navigate('analytics')}>Voir l’analyse <ArrowRight size={15} /></button></div>
-          <div className="funnel">
-            {data.funnel.map((step, index) => (
-              <div className="funnel-row" key={step.label}>
-                <div className="funnel-label"><span>{step.label}</span><strong>{step.value.toLocaleString('fr-FR')}</strong></div>
-                <div className="funnel-track"><span style={{ width: `${step.percent}%` }} /><small>{step.percent}%</small></div>
-                {index < data.funnel.length - 1 && <span className="funnel-rate">{Math.round((data.funnel[index + 1]!.value / step.value) * 100)}%</span>}
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="panel activity-panel">
-          <div className="panel-heading"><div><span className="eyebrow">7 derniers jours</span><h2>Conversations</h2></div><span className="total-badge">456 total</span></div>
-          <div className="bar-chart" aria-label="Activité hebdomadaire">
-            {data.weeklyActivity.map((value, index) => <div className="bar-column" key={index}><span className="bar-value">{value}</span><span className="bar" style={{ height: `${value}%` }} /><small>{['L', 'M', 'M', 'J', 'V', 'S', 'D'][index]}</small></div>)}
-          </div>
-          <div className="activity-summary"><span><i className="dot instagram-dot" /> Instagram <strong>68%</strong></span><span><i className="dot youtube-dot" /> YouTube <strong>21%</strong></span><span><i className="dot tiktok-dot" /> TikTok <strong>11%</strong></span></div>
-        </article>
-      </section>
-
-      <section className="dashboard-lower-grid">
-        <article className="panel">
-          <div className="panel-heading"><div><span className="eyebrow">Priorité commerciale</span><h2>Leads à traiter</h2></div><button className="text-button" onClick={() => navigate('crm')}>Ouvrir le CRM <ArrowRight size={15} /></button></div>
-          <div className="lead-list">
-            {hottestLeads.map((lead) => <div className="lead-row" key={lead.id}><Avatar initials={lead.initials} /><div className="grow"><strong>{lead.name}</strong><span>{lead.handle} · {lead.lastActivity}</span></div><PlatformBadge platform={lead.source} label={false} /><span className="score">{lead.score}</span><span className="value">{lead.value ? `${lead.value.toLocaleString('fr-FR')} €` : 'À estimer'}</span></div>)}
-          </div>
-        </article>
-        <article className="panel quick-actions">
-          <div className="panel-heading"><div><span className="eyebrow">Démarrage rapide</span><h2>Prochaines actions</h2></div></div>
-          <button onClick={() => navigate('connections')}><span className="quick-icon"><Link2 size={18} /></span><span><strong>Finaliser TikTok</strong><small>Accès Business Messaging à valider</small></span><ChevronRight size={18} /></button>
-          <button onClick={() => navigate('inbox')}><span className="quick-icon"><MessageCircle size={18} /></span><span><strong>Répondre à 3 contacts</strong><small>2 conversations prioritaires</small></span><ChevronRight size={18} /></button>
-          <button onClick={() => navigate('automations')}><span className="quick-icon"><Zap size={18} /></span><span><strong>Tester une automatisation</strong><small>Vérifier avant mise en ligne</small></span><ChevronRight size={18} /></button>
-        </article>
-      </section>
-    </div>
-  );
-}
-
-function ConnectionCard({ connection, notify }: { connection: SocialConnection; notify: (text: string) => void }) {
-  const statusLabel = connection.status === 'connected' ? 'Connecté' : connection.status === 'attention' ? 'À vérifier' : 'Accès limité';
-  return (
-    <article className="connection-card">
-      <div className="connection-top">
-        <span className="connection-logo" style={{ '--connection-accent': connection.accent } as React.CSSProperties}><PlatformIcon platform={connection.platform} size={22} /></span>
-        <span className={`status-pill ${connection.status}`}><i /> {statusLabel}</span>
-        <button className="icon-button"><MoreHorizontal size={19} /></button>
-      </div>
-      <div className="connection-identity"><h3>{connection.name}</h3><p>{connection.handle}</p><small>Synchronisé : {connection.lastSync}</small></div>
-      <div className="capability-list">
-        {connection.capabilities.map((capability) => <div key={capability.key} className={capability.available ? 'available' : 'unavailable'}><span>{capability.available ? <Check size={14} /> : <X size={14} />}{capability.label}</span>{capability.note && <span className="capability-note" title={capability.note}><CircleHelp size={14} /></span>}</div>)}
-      </div>
-      <div className="connection-actions">
-        <Button variant="secondary" icon={RefreshCw} onClick={() => notify(`${connection.name} vient d’être resynchronisé.`)}>Synchroniser</Button>
-        <button className="text-button" onClick={() => notify(`Configuration de ${connection.name} ouverte en mode démonstration.`)}>Configurer <ArrowRight size={15} /></button>
-      </div>
-    </article>
-  );
-}
-
-function Connections({ connections, notify }: { connections: SocialConnection[]; notify: (text: string) => void }) {
-  return (
-    <div className="page-stack">
-      <section className="page-heading-row"><div><p className="page-kicker">Canaux et permissions</p><h1>Connexions sociales</h1><p>Connectez les comptes, puis laissez les capacités réelles piloter ce que l’interface autorise.</p></div><Button icon={Plus} onClick={() => notify('L’assistant OAuth sera activé après création des apps développeur.')}>Ajouter un compte</Button></section>
-      <div className="info-banner"><ShieldCheck size={20} /><div><strong>Aucun mot de passe social n’est stocké.</strong><span>Les jetons OAuth seront enregistrés comme secrets Cloudflare et chaque action restera liée aux permissions accordées par la plateforme.</span></div></div>
-      <section className="connection-grid">{connections.map((connection) => <ConnectionCard key={connection.id} connection={connection} notify={notify} />)}<button className="add-connection-card" onClick={() => notify('Choisissez Instagram, YouTube ou TikTok dans l’assistant OAuth.')}><Plus size={24} /><strong>Connecter un autre compte</strong><span>Instagram · YouTube · TikTok</span></button></section>
-    </div>
-  );
-}
-
-function Inbox({ initialConversations, notify }: { initialConversations: Conversation[]; notify: (text: string) => void }) {
-  const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? '');
+export default function App() {
+  const [page, setPage] = useState<Page>('inbox');
+  const [conversations, setConversations] = useState<Conversation[]>(demoData.conversations);
+  const [selectedConversationId, setSelectedConversationId] = useState(demoData.conversations[0]?.id ?? '');
   const [query, setQuery] = useState('');
-  const [platform, setPlatform] = useState<Platform | 'all'>('all');
-  const [draft, setDraft] = useState('');
-  const [suggesting, setSuggesting] = useState(false);
-  const selected = conversations.find((conversation) => conversation.id === selectedId);
-  const filtered = conversations.filter((conversation) => (platform === 'all' || conversation.platform === platform) && `${conversation.name} ${conversation.handle} ${conversation.lastMessage}`.toLowerCase().includes(query.toLowerCase()));
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>('all');
+  const [reply, setReply] = useState('');
+  const [toast, setToast] = useState('');
 
-  async function suggestReply() {
-    if (!selected) return;
-    setSuggesting(true);
+  const [caption, setCaption] = useState('');
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>(['ig-main']);
+  const [mediaName, setMediaName] = useState('');
+  const [adaptPerNetwork, setAdaptPerNetwork] = useState(true);
+  const [timing, setTiming] = useState<PublishTiming>('later');
+  const [scheduleDate, setScheduleDate] = useState(tomorrowKey());
+  const [scheduleTime, setScheduleTime] = useState('10:00');
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>(() => {
     try {
-      const response = await fetch('/api/ai/suggest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intent: selected.intent, name: selected.name }) });
-      const payload = await response.json() as { suggestion?: string };
-      setDraft(payload.suggestion ?? 'Avec plaisir. Pouvez-vous me préciser votre objectif principal ?');
+      const stored = window.localStorage.getItem('social-conversion.demo.scheduled-posts');
+      if (stored) return JSON.parse(stored) as ScheduledPost[];
     } catch {
-      setDraft('Avec plaisir. Pouvez-vous me préciser votre objectif principal ?');
-    } finally {
-      setSuggesting(false);
+      // Ignore invalid demo storage and start with safe fixtures.
     }
-  }
-
-  async function sendMessage(event: FormEvent) {
-    event.preventDefault();
-    if (!selected || !draft.trim()) return;
-    const body = draft.trim();
-    try {
-      const response = await fetch('/api/messages', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ conversationId: selected.id, message: body }) });
-      if (!response.ok) throw new Error('send failed');
-      setConversations((current) => current.map((conversation) => conversation.id === selected.id ? { ...conversation, lastMessage: body, time: 'À l’instant', messages: [...conversation.messages, { id: crypto.randomUUID(), direction: 'outbound', sender: 'Neptune', body, timestamp: 'À l’instant' }] } : conversation));
-      setDraft('');
-      notify('Réponse simulée avec succès. Le connecteur réel prendra le relais en mode live.');
-    } catch {
-      notify('Envoi impossible : vérifiez la connexion au Worker.');
-    }
-  }
-
-  function updateStage(stage: LeadStage) {
-    if (!selected) return;
-    setConversations((current) => current.map((conversation) => conversation.id === selected.id ? { ...conversation, stage } : conversation));
-    notify(`${selected.name} est maintenant à l’étape « ${stage} ».`);
-  }
-
-  return (
-    <div className="inbox-page">
-      <section className="inbox-list-column">
-        <div className="inbox-heading"><div><p className="page-kicker">Centre de réponse</p><h1>Inbox sociale</h1></div><button className="icon-button"><PencilLine size={18} /></button></div>
-        <label className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une conversation" /></label>
-        <div className="filter-row"><button className={platform === 'all' ? 'active' : ''} onClick={() => setPlatform('all')}>Toutes</button>{(['instagram', 'youtube', 'tiktok'] as Platform[]).map((item) => <button className={platform === item ? 'active' : ''} key={item} onClick={() => setPlatform(item)}><PlatformIcon platform={item} size={15} /></button>)}<button aria-label="Plus de filtres"><SlidersHorizontal size={15} /></button></div>
-        <div className="conversation-list">
-          {filtered.length ? filtered.map((conversation) => <button key={conversation.id} className={`conversation-item ${selectedId === conversation.id ? 'selected' : ''}`} onClick={() => setSelectedId(conversation.id)}><Avatar initials={conversation.initials} /><span className="conversation-body"><span className="conversation-name"><strong>{conversation.name}</strong><small>{conversation.time}</small></span><span className="conversation-preview">{conversation.lastMessage}</span><span className="conversation-meta"><PlatformBadge platform={conversation.platform} label={false} /><span>{conversation.account}</span>{conversation.priority === 'haute' && <i className="priority-dot" />}</span></span>{conversation.unread > 0 && <span className="unread-badge">{conversation.unread}</span>}</button>) : <EmptyState title="Aucun résultat" body="Essayez un autre filtre." />}
-        </div>
-      </section>
-
-      {selected ? <>
-        <section className="thread-column">
-          <div className="thread-heading"><div className="thread-contact"><Avatar initials={selected.initials} /><div><strong>{selected.name}</strong><span>{selected.handle} · {selected.account}</span></div></div><div className="thread-actions"><PlatformBadge platform={selected.platform} /><button className="icon-button"><MoreHorizontal size={18} /></button></div></div>
-          <div className="thread-messages">
-            <div className="day-divider"><span>Aujourd’hui</span></div>
-            {selected.messages.map((message) => <div key={message.id} className={`message-row ${message.direction}`}><div className="message-bubble"><p>{message.body}</p><span>{message.timestamp}{message.aiAssisted && <><Sparkles size={12} /> Assisté par l’IA</>}</span></div></div>)}
-          </div>
-          <div className="ai-draft-bar"><span><WandSparkles size={16} /><strong>Copilote</strong> génère un brouillon, jamais un envoi autonome.</span><button onClick={suggestReply} disabled={suggesting}>{suggesting ? <RefreshCw className="spin" size={15} /> : <Sparkles size={15} />} Suggérer</button></div>
-          <form className="composer" onSubmit={sendMessage}><textarea rows={3} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Écrire une réponse…" maxLength={2000} /><div className="composer-footer"><div><button type="button" className="icon-button" aria-label="Joindre un fichier"><Paperclip size={18} /></button><span>{draft.length}/2000</span></div><Button type="submit" icon={Send} disabled={!draft.trim()}>Envoyer</Button></div></form>
-        </section>
-        <aside className="contact-column">
-          <div className="contact-profile"><Avatar initials={selected.initials} large /><h2>{selected.name}</h2><p>{selected.handle}</p><div className="profile-channels"><PlatformBadge platform={selected.platform} /><span className={`sentiment ${selected.sentiment}`}>{selected.sentiment}</span></div></div>
-          <div className="contact-section"><span className="section-label">Opportunité</span><label>Étape<select value={selected.stage} onChange={(event) => updateStage(event.target.value as LeadStage)}>{['Nouveau', 'Qualifié', 'Rendez-vous', 'Proposition', 'Gagné'].map((stage) => <option key={stage}>{stage}</option>)}</select></label><label>Valeur estimée<div className="read-only-field">{selected.estimatedValue ? `${selected.estimatedValue.toLocaleString('fr-FR')} €` : 'À estimer'}</div></label><label>Intention<div className="read-only-field">{selected.intent}</div></label></div>
-          <div className="contact-section"><span className="section-label">Résumé IA</span><p className="ai-summary">Contact intéressé et engagé. Prochaine meilleure action : proposer deux dates et demander sa ville.</p><button className="text-button" onClick={() => notify('Résumé IA actualisé.')}>Actualiser le résumé <RefreshCw size={14} /></button></div>
-        </aside>
-      </> : <EmptyState title="Sélectionnez une conversation" body="Le fil et la fiche contact apparaîtront ici." />}
-    </div>
-  );
-}
-
-function AutomationWizard({ onClose, onCreate }: { onClose: () => void; onCreate: (rule: AutomationRule) => void }) {
-  const [step, setStep] = useState(1);
-  const [name, setName] = useState('Qualification événement');
-  const [platform, setPlatform] = useState<Platform>('instagram');
-  const [trigger, setTrigger] = useState('Commentaire contient un mot-clé');
-  const [action, setAction] = useState('Créer un lead et suggérer une réponse');
-  function finish() {
-    onCreate({ id: crypto.randomUUID(), name, trigger, action, platform, active: false, executions: 0, conversion: 0 });
-    onClose();
-  }
-  return (
-    <Modal title="Nouvelle automatisation" eyebrow={`Étape ${step} sur 4`} onClose={onClose} wide>
-      <div className="wizard-progress">{[1, 2, 3, 4].map((item) => <span key={item} className={item <= step ? 'active' : ''}><i>{item < step ? <Check size={13} /> : item}</i>{['Départ', 'Déclencheur', 'Action', 'Vérification'][item - 1]}</span>)}</div>
-      <div className="wizard-content">
-        {step === 1 && <><h3>Où démarre la conversation ?</h3><p>Le canal choisi limite automatiquement les déclencheurs disponibles.</p><div className="choice-grid">{(['instagram', 'youtube', 'tiktok'] as Platform[]).map((item) => <button key={item} className={platform === item ? 'selected' : ''} onClick={() => setPlatform(item)}><PlatformIcon platform={item} size={22} /><strong>{platformLabels[item]}</strong><span>{item === 'instagram' ? 'DM et commentaires' : item === 'youtube' ? 'Commentaires publics' : 'Selon accès partenaire'}</span></button>)}</div><label className="form-field">Nom de la règle<input value={name} onChange={(event) => setName(event.target.value)} /></label></>}
-        {step === 2 && <><h3>Quel événement doit déclencher la règle ?</h3><p>Un filtre précis réduit les réponses hors contexte.</p><div className="radio-list">{['Commentaire contient un mot-clé', 'Nouveau message privé', 'Intention détectée par l’IA'].map((item) => <label key={item}><input type="radio" name="trigger" checked={trigger === item} onChange={() => setTrigger(item)} /><span><strong>{item}</strong><small>{item === 'Intention détectée par l’IA' ? 'Coût variable, à utiliser après un filtre simple.' : 'Déclencheur faible coût.'}</small></span></label>)}</div></>}
-        {step === 3 && <><h3>Que doit-il se passer ensuite ?</h3><p>Le mode brouillon maintient un humain dans la boucle.</p><div className="radio-list">{['Créer un lead et suggérer une réponse', 'Répondre avec un message approuvé', 'Ajouter une étiquette CRM'].map((item) => <label key={item}><input type="radio" name="action" checked={action === item} onChange={() => setAction(item)} /><span><strong>{item}</strong><small>{item.includes('suggérer') ? 'Recommandé pour le MVP.' : 'Action réversible et tracée.'}</small></span></label>)}</div></>}
-        {step === 4 && <><h3>Vérifiez avant d’activer</h3><div className="review-card"><div><span>Canal</span><strong><PlatformBadge platform={platform} /></strong></div><div><span>Déclencheur</span><strong>{trigger}</strong></div><div><span>Action</span><strong>{action}</strong></div><div><span>État initial</span><strong className="draft-state">Brouillon inactif</strong></div></div><div className="info-banner compact"><ShieldCheck size={18} /><div><strong>Le test ne contactera personne.</strong><span>La règle sera créée inactive et pourra être testée avec un exemple.</span></div></div></>}
-      </div>
-      <div className="modal-footer"><Button variant="ghost" onClick={step === 1 ? onClose : () => setStep(step - 1)}>{step === 1 ? 'Annuler' : 'Retour'}</Button>{step < 4 ? <Button onClick={() => setStep(step + 1)} disabled={step === 1 && !name.trim()}>Continuer <ArrowRight size={15} /></Button> : <Button icon={Check} onClick={finish}>Créer en brouillon</Button>}</div>
-    </Modal>
-  );
-}
-
-function Automations({ initialRules, notify }: { initialRules: AutomationRule[]; notify: (text: string) => void }) {
-  const [rules, setRules] = useState(initialRules);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  function toggleRule(id: string) {
-    setRules((current) => current.map((rule) => rule.id === id ? { ...rule, active: !rule.active } : rule));
-  }
-  return (
-    <div className="page-stack">
-      <section className="page-heading-row"><div><p className="page-kicker">Déclencheurs → actions</p><h1>Automatisations</h1><p>Transformez les signaux sociaux en actions commerciales mesurables.</p></div><Button icon={Plus} onClick={() => setWizardOpen(true)}>Nouvelle automatisation</Button></section>
-      <section className="automation-summary"><div><span className="summary-icon violet"><Zap size={19} /></span><span><strong>{rules.filter((rule) => rule.active).length}</strong> actives</span></div><div><span className="summary-icon cyan"><Play size={19} /></span><span><strong>{rules.reduce((sum, rule) => sum + rule.executions, 0)}</strong> exécutions</span></div><div><span className="summary-icon green"><Target size={19} /></span><span><strong>31%</strong> conversion moyenne</span></div></section>
-      <section className="rule-list">
-        {rules.map((rule) => <article className="rule-card" key={rule.id}><div className="rule-status"><Toggle checked={rule.active} label={`${rule.active ? 'Désactiver' : 'Activer'} ${rule.name}`} onChange={() => toggleRule(rule.id)} /><span className={rule.active ? 'live' : 'draft'}>{rule.active ? 'Active' : 'Brouillon'}</span></div><div className="rule-main"><span className="rule-platform"><PlatformIcon platform={rule.platform} size={18} /></span><div><h3>{rule.name}</h3><p>{rule.caveat ?? 'Dernière exécution réussie · journalisation active'}</p></div></div><div className="rule-flow"><span><small>SI</small>{rule.trigger}</span><ArrowRight size={18} /><span><small>ALORS</small>{rule.action}</span></div><div className="rule-stats"><span><small>Exécutions</small><strong>{rule.executions}</strong></span><span><small>Conversion</small><strong>{rule.conversion}%</strong></span><Button variant="secondary" icon={Play} onClick={() => notify(`Test de « ${rule.name} » réussi, sans envoi externe.`)}>Tester</Button><button className="icon-button"><MoreHorizontal size={18} /></button></div></article>)}
-      </section>
-      {wizardOpen && <AutomationWizard onClose={() => setWizardOpen(false)} onCreate={(rule) => { setRules((current) => [rule, ...current]); notify('Automatisation créée en brouillon.'); }} />}
-    </div>
-  );
-}
-
-function CRM({ initialLeads, notify }: { initialLeads: Lead[]; notify: (text: string) => void }) {
-  const stages: LeadStage[] = ['Nouveau', 'Qualifié', 'Rendez-vous', 'Proposition', 'Gagné'];
-  const [leads, setLeads] = useState(initialLeads);
-  const [selectedId, setSelectedId] = useState<string>();
-  const selected = leads.find((lead) => lead.id === selectedId);
-  function moveLead(id: string, stage: LeadStage) {
-    setLeads((current) => current.map((lead) => lead.id === id ? { ...lead, stage } : lead));
-    notify(`Lead déplacé vers « ${stage} ».`);
-  }
-  return (
-    <div className="page-stack crm-page">
-      <section className="page-heading-row"><div><p className="page-kicker">Pipeline commercial</p><h1>Leads issus des réseaux</h1><p>Une seule vue, de la première interaction au revenu attribué.</p></div><div className="heading-actions"><Button variant="secondary" icon={Filter}>Filtrer</Button><Button icon={Plus} onClick={() => notify('La création manuelle sera reliée à D1 en mode live.')}>Ajouter un lead</Button></div></section>
-      <section className="pipeline-summary"><span><strong>{leads.length}</strong> opportunités</span><span><strong>{leads.reduce((sum, lead) => sum + lead.value, 0).toLocaleString('fr-FR')} €</strong> valeur totale</span><span><strong>38%</strong> probabilité pondérée</span></section>
-      <section className="kanban-board">
-        {stages.map((stage) => { const stageLeads = leads.filter((lead) => lead.stage === stage); return <div className="kanban-column" key={stage}><div className="kanban-heading"><span><i className={`stage-dot stage-${stages.indexOf(stage)}`} />{stage}</span><small>{stageLeads.length}</small></div><div className="kanban-list">{stageLeads.map((lead) => <article className="lead-card" key={lead.id} onClick={() => setSelectedId(lead.id)}><div className="lead-card-top"><Avatar initials={lead.initials} /><PlatformBadge platform={lead.source} label={false} /></div><h3>{lead.name}</h3><p>{lead.handle}</p><div className="tag-list">{lead.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><div className="lead-card-bottom"><span className="score"><Target size={13} /> {lead.score}</span><strong>{lead.value ? `${lead.value.toLocaleString('fr-FR')} €` : 'À estimer'}</strong></div></article>)}</div></div>; })}
-      </section>
-      {selected && <Modal title={selected.name} eyebrow="Fiche opportunité" onClose={() => setSelectedId(undefined)}><div className="lead-modal-profile"><Avatar initials={selected.initials} large /><div><strong>{selected.handle}</strong><PlatformBadge platform={selected.source} /></div></div><div className="detail-grid"><div><span>Score</span><strong>{selected.score}/100</strong></div><div><span>Valeur</span><strong>{selected.value ? `${selected.value.toLocaleString('fr-FR')} €` : 'À estimer'}</strong></div><div><span>Activité</span><strong>{selected.lastActivity}</strong></div><div><span>Source</span><strong>{platformLabels[selected.source]}</strong></div></div><label className="form-field">Déplacer dans le pipeline<select value={selected.stage} onChange={(event) => moveLead(selected.id, event.target.value as LeadStage)}>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></label><div className="modal-footer"><Button variant="secondary" onClick={() => setSelectedId(undefined)}>Fermer</Button><Button icon={MessageCircle} onClick={() => notify('Ouverture de la conversation associée prévue dans l’itération suivante.')}>Voir la conversation</Button></div></Modal>}
-    </div>
-  );
-}
-
-function Analytics({ data }: { data: BootstrapData }) {
-  const maxRevenue = Math.max(...data.sources.map((source) => source.revenue));
-  return (
-    <div className="page-stack">
-      <section className="page-heading-row"><div><p className="page-kicker">Attribution sociale</p><h1>Analyses de conversion</h1><p>Identifiez les canaux et les automatisations qui produisent réellement du revenu.</p></div><button className="date-control"><Clock3 size={16} /> 30 derniers jours <ChevronDown size={15} /></button></section>
-      <section className="analytics-hero"><div><span>Taux interaction → lead</span><strong>3,02%</strong><small><ArrowUpRight size={14} /> +0,6 point</small></div><div><span>Valeur moyenne d’un lead</span><strong>365 €</strong><small><ArrowUpRight size={14} /> +11%</small></div><div><span>Délai moyen de réponse</span><strong>4 min 18</strong><small className="neutral">Objectif &lt; 5 min</small></div></section>
-      <section className="analytics-grid">
-        <article className="panel"><div className="panel-heading"><div><span className="eyebrow">Revenu attribué</span><h2>Performance par canal</h2></div></div><div className="source-performance">{data.sources.map((source) => <div key={source.platform}><div className="source-label"><PlatformBadge platform={source.platform} /><strong>{source.revenue.toLocaleString('fr-FR')} €</strong></div><div className="revenue-track"><span className={source.platform} style={{ width: `${(source.revenue / maxRevenue) * 100}%` }} /></div><div className="source-meta"><span>{source.conversations} conversations</span><span>{source.qualified} qualifiées</span><span>{Math.round((source.qualified / source.conversations) * 100)}% conv.</span></div></div>)}</div></article>
-        <article className="panel"><div className="panel-heading"><div><span className="eyebrow">Lecture rapide</span><h2>Ce qui fonctionne</h2></div></div><div className="insight-list"><div><span className="insight-icon good"><TrendingUp size={18} /></span><div><strong>Instagram porte l’acquisition</strong><p>79% du revenu attribué et le plus grand volume qualifié.</p></div></div><div><span className="insight-icon"><Sparkles size={18} /></span><div><strong>Les brouillons IA accélèrent</strong><p>Temps de première réponse réduit de 38% sur les conversations assistées.</p></div></div><div><span className="insight-icon warn"><Target size={18} /></span><div><strong>YouTube reste sous-exploité</strong><p>Bon signal d’intention, mais 18 commentaires n’ont pas encore de suivi CRM.</p></div></div></div></article>
-      </section>
-      <article className="panel"><div className="panel-heading"><div><span className="eyebrow">Du signal à la vente</span><h2>Conversion détaillée</h2></div><Button variant="secondary">Exporter CSV</Button></div><div className="analytics-table"><div className="analytics-table-row table-header"><span>Canal</span><span>Interactions</span><span>Conversations</span><span>Qualifiés</span><span>CA attribué</span></div>{data.sources.map((source) => <div className="analytics-table-row" key={source.platform}><span><PlatformBadge platform={source.platform} /></span><span>{source.conversations * 7}</span><span>{source.conversations}</span><span>{source.qualified}</span><strong>{source.revenue.toLocaleString('fr-FR')} €</strong></div>)}</div></article>
-    </div>
-  );
-}
-
-function Settings({ notify }: { notify: (text: string) => void }) {
-  const [copilot, setCopilot] = useState(true);
-  const [approval, setApproval] = useState(true);
-  const [tone, setTone] = useState('Chaleureux et professionnel');
-  return (
-    <div className="page-stack settings-page">
-      <section className="page-heading-row"><div><p className="page-kicker">Gouvernance du copilote</p><h1>Paramètres IA</h1><p>Définissez ce que l’IA peut suggérer, sans lui donner plus de pouvoir que nécessaire.</p></div><Button icon={Check} onClick={() => notify('Paramètres enregistrés en mode démonstration.')}>Enregistrer</Button></section>
-      <section className="settings-layout"><nav className="settings-nav"><button className="active"><Bot size={17} /> Copilote</button><button><Database size={17} /> Connaissances</button><button><ShieldCheck size={17} /> Sécurité</button><button><UsersRound size={17} /> Équipe</button></nav><div className="settings-content">
-        <article className="settings-card"><div className="settings-card-heading"><span className="settings-icon"><Bot size={20} /></span><div><h2>Copilote de réponse</h2><p>Génère des brouillons à partir du contexte de la conversation.</p></div><Toggle checked={copilot} onChange={() => setCopilot(!copilot)} label="Activer le copilote" /></div><div className="settings-fields"><label className="form-field">Ton de la marque<select value={tone} onChange={(event) => setTone(event.target.value)}><option>Chaleureux et professionnel</option><option>Direct et énergique</option><option>Élégant et institutionnel</option></select></label><label className="form-field">Instructions permanentes<textarea rows={4} defaultValue="Tutoyer uniquement si le contact tutoie. Répondre en français. Ne jamais inventer une date, un prix ou une disponibilité. Proposer une seule prochaine action claire." /></label></div></article>
-        <article className="settings-card"><div className="settings-card-heading"><span className="settings-icon"><ShieldCheck size={20} /></span><div><h2>Validation humaine</h2><p>Contrôle les cas où un collaborateur doit approuver la réponse.</p></div><Toggle checked={approval} onChange={() => setApproval(!approval)} label="Exiger une validation humaine" /></div><div className="policy-list"><label><input type="checkbox" defaultChecked /> Toujours valider les prix et propositions commerciales</label><label><input type="checkbox" defaultChecked /> Bloquer les promesses de disponibilité non vérifiées</label><label><input type="checkbox" defaultChecked /> Escalader les messages négatifs ou sensibles</label><label><input type="checkbox" /> Autoriser l’envoi automatique des réponses FAQ approuvées</label></div></article>
-        <article className="settings-card"><div className="settings-card-heading"><span className="settings-icon"><Database size={20} /></span><div><h2>Base de connaissances</h2><p>Sources utilisées pour créer les brouillons sans hallucination.</p></div><Button variant="secondary" icon={Plus} onClick={() => notify('L’import de documents sera stocké dans R2 lors du branchement live.')}>Ajouter</Button></div><div className="knowledge-list"><div><span className="file-icon">PDF</span><span><strong>Offres & tarifs Neptune 2026</strong><small>24 pages · mis à jour il y a 5 jours</small></span><CheckCircle2 size={18} /></div><div><span className="file-icon">URL</span><span><strong>neptunebusinessclub.com/evenements</strong><small>Synchronisation quotidienne prévue</small></span><Clock3 size={18} /></div></div></article>
-      </div></section>
-    </div>
-  );
-}
-
-function App() {
-  const [page, setPage] = useState<Page>('dashboard');
-  const [data, setData] = useState<BootstrapData>(demoData);
-  const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [toast, setToast] = useState<string>();
-  const unread = data.conversations.reduce((total, conversation) => total + conversation.unread, 0);
+    return makeInitialPosts();
+  });
 
   useEffect(() => {
-    let active = true;
-    fetch('/api/bootstrap').then((response) => response.ok ? response.json() : Promise.reject()).then((payload: BootstrapData) => active && setData(payload)).catch(() => undefined).finally(() => active && setLoading(false));
-    return () => { active = false; };
-  }, []);
+    window.localStorage.setItem('social-conversion.demo.scheduled-posts', JSON.stringify(scheduledPosts));
+  }, [scheduledPosts]);
 
   useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(undefined), 3400);
+    if (!toast) return undefined;
+    const timeout = window.setTimeout(() => setToast(''), 3500);
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  function navigate(next: Page) {
-    setPage(next);
-    setMenuOpen(false);
+  const selectedConversation = useMemo(
+    () => conversations.find((conversation) => conversation.id === selectedConversationId),
+    [conversations, selectedConversationId],
+  );
+
+  const unreadCount = useMemo(
+    () => conversations.reduce((total, conversation) => total + conversation.unread, 0),
+    [conversations],
+  );
+
+  const filteredConversations = useMemo(() => conversations.filter((conversation) => {
+    const haystack = `${conversation.name} ${conversation.handle} ${conversation.lastMessage}`.toLowerCase();
+    const matchesQuery = haystack.includes(query.toLowerCase());
+    const kind = postKind(conversation);
+    if (!matchesQuery) return false;
+    if (inboxFilter === 'unread') return conversation.unread > 0;
+    if (inboxFilter === 'messages') return kind === 'message';
+    if (inboxFilter === 'comments') return kind === 'comment';
+    return true;
+  }), [conversations, inboxFilter, query]);
+
+  const connectedAccounts = publishingAccounts.filter((account) => account.connected);
+  const upcomingPosts = useMemo(
+    () => [...scheduledPosts].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
+    [scheduledPosts],
+  );
+
+  function navigate(nextPage: Page) {
+    setPage(nextPage);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  const content = useMemo(() => {
-    if (page === 'dashboard') return <Dashboard data={data} navigate={navigate} />;
-    if (page === 'connections') return <Connections connections={data.connections} notify={setToast} />;
-    if (page === 'inbox') return <Inbox initialConversations={data.conversations} notify={setToast} />;
-    if (page === 'automations') return <Automations initialRules={data.automations} notify={setToast} />;
-    if (page === 'crm') return <CRM initialLeads={data.leads} notify={setToast} />;
-    if (page === 'analytics') return <Analytics data={data} />;
-    return <Settings notify={setToast} />;
-  }, [page, data]);
+  function openConversation(id: string) {
+    setSelectedConversationId(id);
+    setConversations((current) => current.map((conversation) => conversation.id === id ? { ...conversation, unread: 0 } : conversation));
+  }
+
+  function sendReply(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedConversation || !reply.trim()) return;
+    const body = reply.trim();
+    setConversations((current) => current.map((conversation) => conversation.id === selectedConversation.id
+      ? {
+        ...conversation,
+        lastMessage: body,
+        time: 'À l’instant',
+        unread: 0,
+        messages: [
+          ...conversation.messages,
+          {
+            id: crypto.randomUUID(),
+            direction: 'outbound',
+            sender: 'Neptune',
+            body,
+            timestamp: 'À l’instant',
+          },
+        ],
+      }
+      : conversation));
+    setReply('');
+    setToast('Réponse ajoutée dans la démo. Le live reste soumis aux permissions du réseau.');
+  }
+
+  function suggestReply() {
+    if (!selectedConversation) return;
+    setReply(`Bonjour ${selectedConversation.name.split(' ')[0]}, avec plaisir. Quel est votre objectif principal en ce moment : trouver des clients, des partenaires ou développer votre réseau ?`);
+  }
+
+  function toggleAccount(id: string) {
+    const account = publishingAccounts.find((candidate) => candidate.id === id);
+    if (!account?.connected) {
+      setToast(`${account?.name ?? 'Ce compte'} doit d’abord être connecté.`);
+      return;
+    }
+    setSelectedAccounts((current) => current.includes(id) ? current.filter((accountId) => accountId !== id) : [...current, id]);
+  }
+
+  function resetComposer() {
+    setCaption('');
+    setMediaName('');
+    setSelectedAccounts(['ig-main']);
+    setTiming('later');
+    setScheduleDate(tomorrowKey());
+    setScheduleTime('10:00');
+  }
+
+  function schedulePublication() {
+    if (!caption.trim()) {
+      setToast('Ajoutez un texte avant de continuer.');
+      return;
+    }
+    if (selectedAccounts.length === 0) {
+      setToast('Choisissez au moins un compte connecté.');
+      return;
+    }
+
+    const scheduledAt = timing === 'now'
+      ? new Date().toISOString()
+      : new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+
+    const post: ScheduledPost = {
+      id: crypto.randomUUID(),
+      content: caption.trim(),
+      accountIds: selectedAccounts,
+      scheduledAt,
+      status: 'scheduled',
+      mediaName: mediaName || undefined,
+    };
+    setScheduledPosts((current) => [...current, post]);
+    setToast(timing === 'now' ? 'Publication ajoutée à la file de diffusion.' : 'Publication programmée.');
+    resetComposer();
+    navigate('calendar');
+  }
+
+  function editScheduledPost(post: ScheduledPost) {
+    setCaption(post.content);
+    setSelectedAccounts(post.accountIds.filter((id) => publishingAccounts.some((account) => account.id === id && account.connected)));
+    setMediaName(post.mediaName ?? '');
+    const date = new Date(post.scheduledAt);
+    setScheduleDate(localDateKey(date));
+    setScheduleTime(`${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`);
+    setTiming('later');
+    setScheduledPosts((current) => current.filter((candidate) => candidate.id !== post.id));
+    navigate('publish');
+  }
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
-        <div className="brand"><span className="brand-mark"><Command size={20} /></span><span><strong>NEPTUNE</strong><small>Social Conversion</small></span><button className="mobile-close icon-button" onClick={() => setMenuOpen(false)} aria-label="Fermer le menu"><X size={19} /></button></div>
-        <div className="workspace-switcher"><span className="workspace-avatar">NB</span><span><strong>Neptune Business</strong><small>Club · France</small></span><ChevronDown size={15} /></div>
-        <nav className="main-nav" aria-label="Navigation principale">{navItems.map((item) => <button className={page === item.id ? 'active' : ''} key={item.id} onClick={() => navigate(item.id)}><item.icon size={18} /><span>{item.label}</span>{item.id === 'inbox' && unread > 0 && <b>{unread}</b>}</button>)}</nav>
-        <div className="sidebar-bottom"><div className="demo-card"><span><Sparkles size={15} /> Mode démonstration</span><p>Toutes les identités et métriques sont fictives. Les contrats Cloudflare sont prêts.</p></div><button><CircleHelp size={18} /> Centre d’aide</button><div className="user-card"><Avatar initials="AN" /><span><strong>Admin Neptune</strong><small>Administrateur</small></span><MoreHorizontal size={17} /></div></div>
+      <aside className="sidebar">
+        <button className="brand" onClick={() => navigate('inbox')} aria-label="Social Conversion">
+          <span className="brand-orbit">N</span>
+          <span><strong>Social</strong><small>Conversion</small></span>
+        </button>
+
+        <nav className="main-nav" aria-label="Navigation principale">
+          {mainNav.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => navigate(item.id)}>
+                <span className="nav-icon"><Icon size={19} /></span>
+                <span>{item.label}</span>
+                {item.id === 'inbox' && unreadCount > 0 && <b>{unreadCount}</b>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="connection-mini">
+            <span className="pulse-dot" />
+            <span><strong>{connectedAccounts.length} comptes prêts</strong><small>{publishingAccounts.length - connectedAccounts.length} à connecter</small></span>
+          </div>
+          <button className={`settings-link ${page === 'more' ? 'active' : ''}`} onClick={() => navigate('more')}>
+            <Settings2 size={18} /> Réglages avancés
+          </button>
+        </div>
       </aside>
-      {menuOpen && <button className="sidebar-scrim" onClick={() => setMenuOpen(false)} aria-label="Fermer le menu" />}
-      <div className="app-main">
-        <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu"><Menu size={21} /></button><div className="breadcrumb"><span>Neptune</span><ChevronRight size={14} /><strong>{pageTitles[page]}</strong></div><div className="topbar-actions"><span className="environment-badge"><i /> Démo sécurisée</span><button className="icon-button notification-button" aria-label="Notifications"><Bell size={19} /><i /></button><Avatar initials="AN" /></div></header>
-        <main className={page === 'inbox' ? 'content content-inbox' : 'content'}>{loading && <div className="loading-line" />}{content}</main>
-      </div>
-      {toast && <div className="toast" role="status"><CheckCircle2 size={18} /><span>{toast}</span><button onClick={() => setToast(undefined)} aria-label="Fermer"><X size={16} /></button></div>}
+
+      <section className="workspace">
+        <header className="topbar">
+          <div className="mobile-brand"><span className="brand-orbit">N</span><strong>Social Conversion</strong></div>
+          <div className="topbar-title">
+            <strong>{page === 'inbox' ? 'Inbox' : page === 'publish' ? 'Créer une publication' : page === 'calendar' ? 'Calendrier' : page === 'results' ? 'Résultats' : 'Réglages avancés'}</strong>
+            <small>{demoData.workspace.mode === 'demo' ? 'Mode démonstration' : 'Live'}</small>
+          </div>
+          <div className="topbar-actions">
+            <button className="icon-only mobile-settings" onClick={() => navigate('more')} aria-label="Réglages"><Settings2 size={19} /></button>
+            <button className="create-button" onClick={() => navigate('publish')}><Plus size={17} /> Créer</button>
+          </div>
+        </header>
+
+        <main className="page-content">
+          {page === 'inbox' && (
+            <InboxPage
+              conversations={filteredConversations}
+              selectedConversation={selectedConversation}
+              query={query}
+              filter={inboxFilter}
+              reply={reply}
+              onQuery={setQuery}
+              onFilter={setInboxFilter}
+              onSelect={openConversation}
+              onReply={setReply}
+              onSend={sendReply}
+              onSuggest={suggestReply}
+            />
+          )}
+
+          {page === 'publish' && (
+            <PublishPage
+              caption={caption}
+              selectedAccounts={selectedAccounts}
+              mediaName={mediaName}
+              adaptPerNetwork={adaptPerNetwork}
+              timing={timing}
+              scheduleDate={scheduleDate}
+              scheduleTime={scheduleTime}
+              onCaption={setCaption}
+              onToggleAccount={toggleAccount}
+              onMediaName={setMediaName}
+              onAdapt={setAdaptPerNetwork}
+              onTiming={setTiming}
+              onScheduleDate={setScheduleDate}
+              onScheduleTime={setScheduleTime}
+              onSchedule={schedulePublication}
+            />
+          )}
+
+          {page === 'calendar' && <CalendarPage posts={upcomingPosts} onEdit={editScheduledPost} onCreate={() => navigate('publish')} />}
+          {page === 'results' && <ResultsPage />}
+          {page === 'more' && <MorePage notify={setToast} />}
+        </main>
+      </section>
+
+      <nav className="mobile-nav" aria-label="Navigation mobile">
+        {mainNav.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => navigate(item.id)}>
+              <Icon size={19} />
+              <span>{item.label}</span>
+              {item.id === 'inbox' && unreadCount > 0 && <b>{unreadCount}</b>}
+            </button>
+          );
+        })}
+      </nav>
+
+      {toast && <Toast text={toast} onClose={() => setToast('')} />}
     </div>
   );
 }
 
-export default App;
+function InboxPage({
+  conversations,
+  selectedConversation,
+  query,
+  filter,
+  reply,
+  onQuery,
+  onFilter,
+  onSelect,
+  onReply,
+  onSend,
+  onSuggest,
+}: {
+  conversations: Conversation[];
+  selectedConversation?: Conversation;
+  query: string;
+  filter: InboxFilter;
+  reply: string;
+  onQuery: (value: string) => void;
+  onFilter: (value: InboxFilter) => void;
+  onSelect: (id: string) => void;
+  onReply: (value: string) => void;
+  onSend: (event: FormEvent) => void;
+  onSuggest: () => void;
+}) {
+  return (
+    <div className="inbox-layout">
+      <section className="inbox-list-panel">
+        <div className="page-intro compact">
+          <div><span className="eyebrow">Tout au même endroit</span><h1>À qui répondre ?</h1></div>
+        </div>
+        <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Rechercher une personne…" /></label>
+        <div className="filter-row">
+          {([
+            ['all', 'Tout'],
+            ['unread', 'À traiter'],
+            ['messages', 'Messages'],
+            ['comments', 'Commentaires'],
+          ] as Array<[InboxFilter, string]>).map(([value, label]) => (
+            <button key={value} className={filter === value ? 'active' : ''} onClick={() => onFilter(value)}>{label}</button>
+          ))}
+        </div>
+        <div className="conversation-list">
+          {conversations.map((conversation) => (
+            <button key={conversation.id} className={`conversation-item ${selectedConversation?.id === conversation.id ? 'active' : ''}`} onClick={() => onSelect(conversation.id)}>
+              <span className="avatar">{conversation.initials}</span>
+              <span className="conversation-copy">
+                <span><strong>{conversation.name}</strong><time>{conversation.time}</time></span>
+                <small>{conversation.lastMessage}</small>
+                <span className="conversation-source"><AccountMark platform={conversation.platform} /> {postKind(conversation) === 'comment' ? 'Commentaire' : 'Message'} · {conversation.account}</span>
+              </span>
+              {conversation.unread > 0 && <b className="unread-dot">{conversation.unread}</b>}
+            </button>
+          ))}
+          {conversations.length === 0 && <div className="empty-simple"><Search size={22} /><strong>Aucun résultat</strong><span>Essayez un autre filtre.</span></div>}
+        </div>
+      </section>
+
+      <section className="thread-panel">
+        {selectedConversation ? (
+          <>
+            <header className="thread-header">
+              <div className="thread-person"><span className="avatar large">{selectedConversation.initials}</span><span><strong>{selectedConversation.name}</strong><small>{selectedConversation.handle} · {selectedConversation.account}</small></span></div>
+              <span className="simple-stage">{selectedConversation.stage}</span>
+            </header>
+            <div className="thread-messages">
+              {selectedConversation.messages.map((message) => (
+                <div key={message.id} className={`message ${message.direction}`}>
+                  <div>{message.body}</div>
+                  <small>{message.timestamp}{message.aiAssisted ? ' · assisté IA' : ''}</small>
+                </div>
+              ))}
+            </div>
+            <div className="reply-area">
+              <button className="ai-shortcut" onClick={onSuggest}><Sparkles size={16} /> Proposer une réponse</button>
+              <form onSubmit={onSend}>
+                <button type="button" className="composer-icon" aria-label="Joindre un fichier"><Paperclip size={18} /></button>
+                <textarea value={reply} onChange={(event) => onReply(event.target.value)} placeholder="Écrire une réponse…" rows={2} />
+                <button className="send-button" type="submit" disabled={!reply.trim()} aria-label="Envoyer"><Send size={18} /></button>
+              </form>
+              <small className="reply-note">La démo n’envoie rien vers les réseaux. En live, l’envoi dépend des permissions de chaque compte.</small>
+            </div>
+          </>
+        ) : <div className="empty-thread"><MessageCircle size={28} /><strong>Choisissez une conversation</strong><span>Messages et commentaires arrivent ici.</span></div>}
+      </section>
+
+      {selectedConversation && (
+        <aside className="contact-panel">
+          <span className="avatar xlarge">{selectedConversation.initials}</span>
+          <h3>{selectedConversation.name}</h3>
+          <p>{selectedConversation.handle}</p>
+          <div className="contact-facts">
+            <span><small>Intention</small><strong>{selectedConversation.intent}</strong></span>
+            <span><small>Étape</small><strong>{selectedConversation.stage}</strong></span>
+            <span><small>Valeur estimée</small><strong>{selectedConversation.estimatedValue ? `${selectedConversation.estimatedValue.toLocaleString('fr-FR')} €` : 'À qualifier'}</strong></span>
+          </div>
+          <button className="secondary-wide">Voir la fiche contact <ChevronRight size={16} /></button>
+        </aside>
+      )}
+    </div>
+  );
+}
+
+function PublishPage({
+  caption,
+  selectedAccounts,
+  mediaName,
+  adaptPerNetwork,
+  timing,
+  scheduleDate,
+  scheduleTime,
+  onCaption,
+  onToggleAccount,
+  onMediaName,
+  onAdapt,
+  onTiming,
+  onScheduleDate,
+  onScheduleTime,
+  onSchedule,
+}: {
+  caption: string;
+  selectedAccounts: string[];
+  mediaName: string;
+  adaptPerNetwork: boolean;
+  timing: PublishTiming;
+  scheduleDate: string;
+  scheduleTime: string;
+  onCaption: (value: string) => void;
+  onToggleAccount: (id: string) => void;
+  onMediaName: (value: string) => void;
+  onAdapt: (value: boolean) => void;
+  onTiming: (value: PublishTiming) => void;
+  onScheduleDate: (value: string) => void;
+  onScheduleTime: (value: string) => void;
+  onSchedule: () => void;
+}) {
+  const selectedConnected = publishingAccounts.filter((account) => selectedAccounts.includes(account.id));
+  return (
+    <div className="publish-page">
+      <div className="page-intro">
+        <div><span className="eyebrow">3 étapes, pas plus</span><h1>Créer une publication</h1><p>Ajoutez le contenu, choisissez les comptes, puis dites quand publier.</p></div>
+        <div className="step-indicator"><span className="active">1 Contenu</span><i /><span className={selectedAccounts.length ? 'active' : ''}>2 Comptes</span><i /><span className="active">3 Quand</span></div>
+      </div>
+
+      <div className="publish-grid">
+        <section className="composer-card">
+          <div className="section-heading"><span className="section-number">1</span><div><h2>Votre contenu</h2><p>Un seul contenu de départ. Social Conversion prépare les variantes.</p></div></div>
+          <textarea className="caption-box" value={caption} onChange={(event) => onCaption(event.target.value)} placeholder="Qu’est-ce que vous voulez publier ?" maxLength={5000} />
+          <label className={`media-drop ${mediaName ? 'has-file' : ''}`}>
+            <input type="file" accept="image/*,video/*" onChange={(event) => onMediaName(event.target.files?.[0]?.name ?? '')} />
+            <span className="media-icon"><FileImage size={22} /></span>
+            <span><strong>{mediaName || 'Ajouter une photo ou une vidéo'}</strong><small>{mediaName ? 'Cliquez pour remplacer le fichier' : 'Glissez votre fichier ici ou cliquez'}</small></span>
+            {mediaName && <Check size={18} />}
+          </label>
+
+          <div className="adapt-row">
+            <span><Sparkles size={17} /><span><strong>Adapter à chaque réseau</strong><small>Format, longueur et ton préparés automatiquement</small></span></span>
+            <button role="switch" aria-checked={adaptPerNetwork} className={`switch ${adaptPerNetwork ? 'on' : ''}`} onClick={() => onAdapt(!adaptPerNetwork)}><span /></button>
+          </div>
+        </section>
+
+        <aside className="preview-card">
+          <span className="eyebrow">Aperçu</span>
+          <div className="preview-phone">
+            <div className="preview-account"><span className="preview-avatar">N</span><span><strong>Neptune Business</strong><small>{selectedConnected.length ? `${selectedConnected.length} compte${selectedConnected.length > 1 ? 's' : ''} sélectionné${selectedConnected.length > 1 ? 's' : ''}` : 'Choisissez un compte'}</small></span></div>
+            <div className="preview-media">{mediaName ? <><Video size={30} /><small>{mediaName}</small></> : <><Camera size={30} /><small>Votre média apparaîtra ici</small></>}</div>
+            <p>{caption || 'Votre texte apparaîtra ici pendant que vous l’écrivez.'}</p>
+            {adaptPerNetwork && caption && <span className="adapted-badge"><Sparkles size={13} /> variantes activées</span>}
+          </div>
+        </aside>
+      </div>
+
+      <section className="publish-section">
+        <div className="section-heading"><span className="section-number">2</span><div><h2>Où publier ?</h2><p>Sélectionnez les comptes. Les comptes non prêts restent clairement bloqués.</p></div></div>
+        <div className="account-picker">
+          {publishingAccounts.map((account) => {
+            const selected = selectedAccounts.includes(account.id);
+            return (
+              <button key={account.id} className={`account-choice ${selected ? 'selected' : ''} ${!account.connected ? 'disabled' : ''}`} onClick={() => onToggleAccount(account.id)}>
+                <AccountMark platform={account.platform} />
+                <span><strong>{account.name}</strong><small>{platformLabels[account.platform]} · {account.handle}</small></span>
+                <span className={`choice-state ${selected ? 'selected' : ''}`}>{account.connected ? (selected ? <Check size={14} /> : '') : account.note}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="publish-section timing-section">
+        <div className="section-heading"><span className="section-number">3</span><div><h2>Quand ?</h2><p>Maintenant ou plus tard. Rien d’autre à configurer.</p></div></div>
+        <div className="timing-options">
+          <button className={timing === 'now' ? 'active' : ''} onClick={() => onTiming('now')}><Zap size={18} /><span><strong>Maintenant</strong><small>Ajouter à la file de diffusion</small></span></button>
+          <button className={timing === 'later' ? 'active' : ''} onClick={() => onTiming('later')}><CalendarDays size={18} /><span><strong>Programmer</strong><small>Choisir une date et une heure</small></span></button>
+          {timing === 'later' && <div className="datetime-fields"><label><span>Date</span><input type="date" value={scheduleDate} min={localDateKey(new Date())} onChange={(event) => onScheduleDate(event.target.value)} /></label><label><span>Heure</span><input type="time" value={scheduleTime} onChange={(event) => onScheduleTime(event.target.value)} /></label></div>}
+        </div>
+        <div className="publish-submit-row">
+          <span><Check size={16} /><strong>{selectedAccounts.length}</strong> compte{selectedAccounts.length > 1 ? 's' : ''} sélectionné{selectedAccounts.length > 1 ? 's' : ''}</span>
+          <button className="primary-large" onClick={onSchedule}>{timing === 'now' ? 'Publier maintenant' : 'Programmer la publication'} <ChevronRight size={17} /></button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CalendarPage({ posts, onEdit, onCreate }: { posts: ScheduledPost[]; onEdit: (post: ScheduledPost) => void; onCreate: () => void }) {
+  const grouped = useMemo(() => {
+    const map = new Map<string, ScheduledPost[]>();
+    posts.forEach((post) => {
+      const key = localDateKey(new Date(post.scheduledAt));
+      map.set(key, [...(map.get(key) ?? []), post]);
+    });
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [posts]);
+
+  return (
+    <div className="calendar-page">
+      <div className="page-intro">
+        <div><span className="eyebrow">Vue simple</span><h1>Ce qui va être publié</h1><p>Une liste chronologique. Aucun calendrier usine à gaz.</p></div>
+        <button className="primary-small" onClick={onCreate}><Plus size={16} /> Nouvelle publication</button>
+      </div>
+
+      <div className="calendar-summary">
+        <span><strong>{posts.length}</strong><small>programmées</small></span>
+        <span><strong>{posts.reduce((total, post) => total + post.accountIds.length, 0)}</strong><small>diffusions prévues</small></span>
+        <span><strong>{new Set(posts.flatMap((post) => post.accountIds)).size}</strong><small>comptes concernés</small></span>
+      </div>
+
+      <section className="timeline">
+        {grouped.map(([date, dayPosts]) => (
+          <div className="timeline-day" key={date}>
+            <div className="day-label"><strong>{new Intl.DateTimeFormat('fr-FR', { weekday: 'long' }).format(new Date(`${date}T12:00:00`))}</strong><span>{new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date(`${date}T12:00:00`))}</span></div>
+            <div className="day-posts">
+              {dayPosts.map((post) => (
+                <article className="scheduled-card" key={post.id}>
+                  <div className="scheduled-time"><Clock3 size={15} /> {new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(new Date(post.scheduledAt))}</div>
+                  <div className="scheduled-copy"><strong>{post.content}</strong>{post.mediaName && <small><FileImage size={13} /> {post.mediaName}</small>}</div>
+                  <div className="scheduled-accounts">{post.accountIds.map((id) => {
+                    const account = publishingAccounts.find((candidate) => candidate.id === id);
+                    return account ? <AccountMark key={id} platform={account.platform} /> : null;
+                  })}</div>
+                  <button className="edit-button" onClick={() => onEdit(post)}>Modifier</button>
+                </article>
+              ))}
+            </div>
+          </div>
+        ))}
+        {grouped.length === 0 && <div className="calendar-empty"><CalendarDays size={28} /><strong>Rien de programmé</strong><span>Créez votre première publication.</span><button onClick={onCreate}>Créer maintenant</button></div>}
+      </section>
+    </div>
+  );
+}
+
+function ResultsPage() {
+  return (
+    <div className="results-page">
+      <div className="page-intro"><div><span className="eyebrow">Comprendre en 10 secondes</span><h1>Ce qui fonctionne vraiment</h1><p>Pas 40 graphiques : portée, interactions et business généré.</p></div><button className="period-button"><CalendarDays size={16} /> 30 derniers jours</button></div>
+      <section className="result-metrics">
+        <article><span>Personnes touchées</span><strong>84 260</strong><small>sur tous les comptes</small></article>
+        <article><span>Interactions</span><strong>5 482</strong><small>messages, commentaires, réactions</small></article>
+        <article><span>Conversations</span><strong>183</strong><small>ouvertes depuis les réseaux</small></article>
+        <article className="highlight"><span>Leads générés</span><strong>61</strong><small>33 % des conversations</small></article>
+      </section>
+      <section className="results-table-card">
+        <div className="section-heading simple"><div><h2>Vos meilleurs contenus</h2><p>Ceux qui ont réellement créé de l’intérêt.</p></div></div>
+        <div className="results-table">
+          <div className="results-head"><span>Contenu</span><span>Vues</span><span>Interactions</span><span>Leads</span></div>
+          {resultRows.map((row) => (
+            <div className="results-row" key={row.title}><span><strong>{row.title}</strong><small>{row.platform}</small></span><strong>{row.views}</strong><strong>{row.interactions}</strong><strong>{row.leads}</strong></div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MorePage({ notify }: { notify: (text: string) => void }) {
+  return (
+    <div className="more-page">
+      <div className="page-intro"><div><span className="eyebrow">Secondaire</span><h1>Réglages avancés</h1><p>Tout ce qui n’a pas besoin d’être sous vos yeux chaque jour.</p></div></div>
+      <div className="advanced-grid">
+        <article className="advanced-card"><span className="advanced-icon"><Link2 size={20} /></span><div><h3>Comptes connectés</h3><p>Gérer les autorisations Instagram, YouTube, TikTok, Facebook et LinkedIn.</p></div><button onClick={() => notify('La gestion OAuth reste reliée aux connecteurs réels du backend.')}>Gérer <ChevronRight size={15} /></button></article>
+        <article className="advanced-card"><span className="advanced-icon"><Zap size={20} /></span><div><h3>Automatisations</h3><p>Réponses suggérées, qualification et actions après un commentaire ou un message.</p></div><button onClick={() => notify('Les automatisations existantes restent disponibles en arrière-plan.')}>Gérer <ChevronRight size={15} /></button></article>
+        <article className="advanced-card"><span className="advanced-icon"><Sparkles size={20} /></span><div><h3>IA et ton de marque</h3><p>Définir le ton, les règles et ce que l’assistant peut proposer.</p></div><button onClick={() => notify('Le copilote IA conserve une validation humaine obligatoire.')}>Configurer <ChevronRight size={15} /></button></article>
+        <article className="advanced-card"><span className="advanced-icon"><CircleHelp size={20} /></span><div><h3>État des connecteurs</h3><p>Voir ce qui est réellement disponible ou bloqué par chaque plateforme.</p></div><button onClick={() => notify('Instagram : permissions Meta requises · TikTok : Business Messaging partenaire · YouTube : commentaires uniquement.')}>Voir l’état <ChevronRight size={15} /></button></article>
+      </div>
+    </div>
+  );
+}
