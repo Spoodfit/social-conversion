@@ -8,6 +8,7 @@ import './social-core.css';
 import './publication-editor.css';
 import './social-fields.css';
 import './media-format-preview.css';
+import './create-library-dnd.css';
 
 const DemoApp = lazy(() => import('./App'));
 
