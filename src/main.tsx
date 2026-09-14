@@ -12,6 +12,7 @@ import './create-library-dnd.css';
 import './planner-quick-add.css';
 import './planner-drawer.css';
 import './drawer-hierarchy.css';
+import './drawer-v2.css';
 
 const DemoApp = lazy(() => import('./App'));
 
