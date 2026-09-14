@@ -23,6 +23,7 @@
     "DEMO_MODE": "false",
     "LIVE_READY": "true",
     "META_GRAPH_VERSION": "v24.0",
+    "META_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/meta/callback",
     "INSTAGRAM_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/instagram/callback",
     "YOUTUBE_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/youtube/callback",
     "TIKTOK_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/tiktok/callback",
