@@ -5,8 +5,6 @@ function replaceOnce(source, before, after, label) {
   return source.replace(before, after);
 }
 
-// 1) New YouTube publications should naturally become public at the scheduled time,
-// while keeping private as an explicit opt-in choice.
 const fieldsPath = 'src/shared/social-publication-fields.ts';
 let fields = fs.readFileSync(fieldsPath, 'utf8');
 if (!fields.includes('Publique à l’heure programmée')) {
@@ -25,8 +23,6 @@ if (!fields.includes('Publique à l’heure programmée')) {
   fs.writeFileSync(fieldsPath, fields);
 }
 
-// 2) Make browser-local schedule conversion explicit and DST-safe, then surface
-// the exact timezone alongside the user-facing date and time.
 const appPath = 'src/LiveAppV3.tsx';
 let app = fs.readFileSync(appPath, 'utf8');
 if (!app.includes('sc12-youtube-schedule-choice')) {
@@ -67,8 +63,8 @@ if (!app.includes('sc12-youtube-schedule-choice')) {
 
   app = replaceOnce(
     app,
-    `{activePreviewDestination && <div className="sc9-active-network"><PlatformMark platform={activePreviewDestination.platform} size={17} /><span><strong>{activePreviewDestination.accountLabel}</strong><small>{platformLabel(activePreviewDestination.platform)} · {activePreviewDestination.format}</small></span></div>}\n            <div className="sc9-fields">`,
-    `{activePreviewDestination && <div className="sc9-active-network"><PlatformMark platform={activePreviewDestination.platform} size={17} /><span><strong>{activePreviewDestination.accountLabel}</strong><small>{platformLabel(activePreviewDestination.platform)} · {activePreviewDestination.format}</small></span></div>}\n            {activeGuidedDestination?.platform === 'youtube' && activeGuidedDraftKey && activeGuidedDraft && (\n              <div className="sc12-youtube-schedule-choice">\n                <div className="sc12-choice-head"><strong>Visibilité sur YouTube</strong><small>Que doit-il se passer à l’heure programmée ?</small></div>\n                <div className="sc12-choice-options">\n                  <button type="button" className={activeYoutubePrivacy === 'public' ? 'active' : ''} onClick={() => onDestinationDraft(activeGuidedDraftKey, { ...activeGuidedDraft, fields: { ...activeGuidedDraft.fields, privacyStatus: 'public' } })}>\n                    <span aria-hidden="true">🌍</span><span><strong>Publique à l’heure programmée</strong><small>La vidéo reste privée jusque-là, puis YouTube la rend publique automatiquement.</small></span>{activeYoutubePrivacy === 'public' && <Check size={16} />}\n                  </button>\n                  <button type="button" className={activeYoutubePrivacy === 'private' ? 'active' : ''} onClick={() => onDestinationDraft(activeGuidedDraftKey, { ...activeGuidedDraft, fields: { ...activeGuidedDraft.fields, privacyStatus: 'private' } })}>\n                    <span aria-hidden="true">🔒</span><span><strong>Privée</strong><small>La vidéo restera privée même après l’heure prévue.</small></span>{activeYoutubePrivacy === 'private' && <Check size={16} />}\n                  </button>\n                </div>\n                <div className="sc12-schedule-confirm"><Clock3 size={15} /><span><small>{activeYoutubePrivacy === 'public' ? 'Publication publique prévue' : 'Envoi privé prévu'}</small><strong>{scheduleLabel}</strong><em>{scheduleTimeZone}</em></span></div>\n              </div>\n            )}\n            <div className="sc9-fields">`,
+    `            <div className="sc9-fields">`,
+    `            {activeGuidedDestination?.platform === 'youtube' && activeGuidedDraftKey && activeGuidedDraft && (\n              <div className="sc12-youtube-schedule-choice">\n                <div className="sc12-choice-head"><strong>Visibilité sur YouTube</strong><small>Que doit-il se passer à l’heure programmée ?</small></div>\n                <div className="sc12-choice-options">\n                  <button type="button" className={activeYoutubePrivacy === 'public' ? 'active' : ''} onClick={() => onDestinationDraft(activeGuidedDraftKey, { ...activeGuidedDraft, fields: { ...activeGuidedDraft.fields, privacyStatus: 'public' } })}>\n                    <span aria-hidden="true">🌍</span><span><strong>Publique à l’heure programmée</strong><small>La vidéo reste privée jusque-là, puis YouTube la rend publique automatiquement.</small></span>{activeYoutubePrivacy === 'public' && <Check size={16} />}\n                  </button>\n                  <button type="button" className={activeYoutubePrivacy === 'private' ? 'active' : ''} onClick={() => onDestinationDraft(activeGuidedDraftKey, { ...activeGuidedDraft, fields: { ...activeGuidedDraft.fields, privacyStatus: 'private' } })}>\n                    <span aria-hidden="true">🔒</span><span><strong>Privée</strong><small>La vidéo restera privée même après l’heure prévue.</small></span>{activeYoutubePrivacy === 'private' && <Check size={16} />}\n                  </button>\n                </div>\n                <div className="sc12-schedule-confirm"><Clock3 size={15} /><span><small>{activeYoutubePrivacy === 'public' ? 'Publication publique prévue' : 'Envoi privé prévu'}</small><strong>{scheduleLabel}</strong><em>{scheduleTimeZone}</em></span></div>\n              </div>\n            )}\n            <div className="sc9-fields">`,
     'guided YouTube visibility cards',
   );
 
