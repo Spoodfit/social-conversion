@@ -5,6 +5,7 @@ import './styles.css';
 import './cockpit-live.css';
 import './social-planner.css';
 import './social-core.css';
+import './publication-editor.css';
 
 const DemoApp = lazy(() => import('./App'));
 
