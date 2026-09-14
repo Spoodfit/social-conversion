@@ -89,20 +89,20 @@ describe('worker security boundary', () => {
     expect(membership).toEqual({ access_subject: subject, status: 'active' });
   });
 
-  it('exposes an authenticated demo runtime state', async () => {
+  it('exposes an authenticated live validation runtime state', async () => {
     const subject = 'runtime-agent';
     await insertMember(subject, 'agent');
     const response = await fetchApp(subject, '/api/runtime');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      mode: 'demo',
+      mode: 'live',
       ready: true,
       outboundReady: false,
       aiReady: false,
     });
   });
 
-  it('audits a simulated outbound message without storing its body in the audit log', async () => {
+  it('fails closed instead of simulating outbound messages in live validation mode', async () => {
     const subject = 'message-agent';
     await insertMember(subject, 'agent');
     const response = await fetchApp(subject, '/api/messages', {
@@ -110,8 +110,8 @@ describe('worker security boundary', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ conversationId: 'conv-demo', message: 'Bonjour' }),
     });
-    expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toMatchObject({ status: 'simulated' });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ code: 'OUTBOUND_NOT_READY' });
 
     const audit = await env.DB
       .prepare(
@@ -120,12 +120,7 @@ describe('worker security boundary', () => {
       )
       .bind(subject)
       .first<{ action: string; workspace_id: string; actor_id: string; metadata_json: string }>();
-    expect(audit).toMatchObject({
-      action: 'message.simulated',
-      workspace_id: 'default',
-      actor_id: subject,
-    });
-    expect(JSON.parse(audit?.metadata_json ?? '{}')).toEqual({ messageLength: 7 });
+    expect(audit).toBeNull();
   });
 
   it('blocks mutations for viewer roles', async () => {
