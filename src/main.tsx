@@ -7,6 +7,7 @@ import './social-planner.css';
 import './social-core.css';
 import './publication-editor.css';
 import './social-fields.css';
+import './media-format-preview.css';
 
 const DemoApp = lazy(() => import('./App'));
 
