@@ -1,8 +1,9 @@
 import { StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import LiveApp, { type LiveRuntimeState } from './LiveApp';
+import LiveAppV2, { type LiveRuntimeStateV2 } from './LiveAppV2';
 import './styles.css';
 import './cockpit-live.css';
+import './social-planner.css';
 
 const DemoApp = lazy(() => import('./App'));
 
@@ -11,6 +12,7 @@ type RuntimeState = {
   ready: boolean;
   outboundReady: boolean;
   aiReady: boolean;
+  instagramOAuthReady?: boolean;
   publishingSchedulerReady?: boolean;
   contentPublishingReady?: boolean;
 };
@@ -71,7 +73,7 @@ function RuntimeGate() {
   }
 
   if (runtime.mode === 'live') {
-    return <LiveApp runtime={runtime as LiveRuntimeState} />;
+    return <LiveAppV2 runtime={runtime as LiveRuntimeStateV2} />;
   }
 
   return (
