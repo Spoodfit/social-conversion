@@ -59,7 +59,7 @@ async function handleSocialCopyApi(request: Request, env: Env): Promise<Response
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const result = await generateSocialCopy(env, body);
-    await writeAuditLog(env.DB, auth.principal, 'ai.social_copy_generated', 'social_copy', `${result.platform}:${result.format}`, {
+    await writeAuditLog(env.DB, auth.principal, 'ai.social_copy_generated', 'social_copy', result.platform + ':' + result.format, {
       objective: result.objective,
       platform: result.platform,
       format: result.format,
