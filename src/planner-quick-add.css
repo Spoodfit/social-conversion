@@ -1,0 +1,5 @@
+.sc3-day-track{cursor:crosshair}
+.sc5-planner-quick-add{position:absolute;left:7px;right:7px;z-index:6;height:30px;transform:translateY(-50%);border:1px dashed #bdaef8;border-radius:9px;background:rgba(249,247,255,.96);color:#6431d6;display:flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 5px 14px rgba(83,49,177,.08);font-size:8px;font-weight:800;cursor:pointer;pointer-events:auto;backdrop-filter:blur(5px)}
+.sc5-planner-quick-add span{font-variant-numeric:tabular-nums;color:#7b6aa9}.sc5-planner-quick-add strong{font-size:8px}.sc5-planner-quick-add:hover{border-style:solid;background:#f3efff;box-shadow:0 7px 18px rgba(83,49,177,.13)}
+.sc3-agenda-card{cursor:pointer}.sc3-agenda-card:active{cursor:grabbing}
+@media(max-width:800px){.sc3-day-track{cursor:pointer}.sc5-planner-quick-add{height:34px}}
