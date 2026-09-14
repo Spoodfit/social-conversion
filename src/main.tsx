@@ -15,6 +15,7 @@ import './drawer-hierarchy.css';
 import './drawer-v2.css';
 import './guided-composer.css';
 import './youtube-scheduling-ux.css';
+import './planner-publication-status.css';
 
 const DemoApp = lazy(() => import('./App'));
 
