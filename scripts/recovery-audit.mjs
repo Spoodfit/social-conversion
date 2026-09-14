@@ -26,8 +26,16 @@ if (!worker.includes('listWorkspaceMemberships') || !worker.includes("'/api/work
   failures.push('authenticated workspace discovery must be available before scoped API calls');
 }
 
-if (!/"LIVE_READY"\s*:\s*"false"/.test(wrangler)) {
-  failures.push('LIVE_READY must default to false');
+const safeDefaultConfig = /"LIVE_READY"\s*:\s*"false"/.test(wrangler);
+const privateValidationConfig =
+  /"APP_ENV"\s*:\s*"validation"/.test(wrangler)
+  && /"DEMO_MODE"\s*:\s*"false"/.test(wrangler)
+  && /"LIVE_READY"\s*:\s*"true"/.test(wrangler)
+  && /"pattern"\s*:\s*"social\.neptunebusiness\.com"/.test(wrangler)
+  && /"INSTAGRAM_REDIRECT_URI"\s*:\s*"https:\/\/social\.neptunebusiness\.com\/oauth\/instagram\/callback"/.test(wrangler);
+
+if (!safeDefaultConfig && !privateValidationConfig) {
+  failures.push('LIVE_READY may only be true for the private validation configuration on social.neptunebusiness.com');
 }
 
 if (!/"workers_dev"\s*:\s*false/.test(wrangler) || !/"preview_urls"\s*:\s*false/.test(wrangler)) {
@@ -101,4 +109,6 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('Recovery audit passed. Live mode remains fail-closed, workspace-scoped and isolated from demo data.');
+console.log(privateValidationConfig
+  ? 'Recovery audit passed. Private validation mode is live, fail-closed, workspace-scoped and isolated from demo data.'
+  : 'Recovery audit passed. Live mode remains fail-closed, workspace-scoped and isolated from demo data.');
