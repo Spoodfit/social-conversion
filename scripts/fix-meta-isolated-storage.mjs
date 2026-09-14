@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const metaPath = 'src/worker/meta-oauth.ts';
 let meta = fs.readFileSync(metaPath, 'utf8');
 
-if (!meta.includes('META_ISOLATED_FACEBOOK_STORAGE')) {
+if (!meta.includes('META_SELECTION_V2') && !meta.includes('META_ISOLATED_FACEBOOK_STORAGE')) {
   meta = meta.replace(
     "import { saveOAuthCredentials, tokenKeyringSecret } from './token-vault';",
     "import { encryptToken, saveOAuthCredentials, tokenKeyringSecret } from './token-vault';",
@@ -21,7 +21,7 @@ if (!meta.includes('META_ISOLATED_FACEBOOK_STORAGE')) {
 ): Promise<string | undefined> {
   const row = await db.prepare(
     \`SELECT id FROM social_connections
-     WHERE workspace_id = ? AND platform = 'instagram' AND external_account_id = ? AND id LIKE 'igmeta:%'
+     WHERE workspace_id = ? AND platform = 'instagram' AND external_account_id = ?
      ORDER BY CASE WHEN status = 'connected' THEN 0 ELSE 1 END, created_at ASC
      LIMIT 1\`,
   ).bind(workspaceId, externalAccountId).first<{ id: string }>();
@@ -195,6 +195,7 @@ if (!index.includes('FACEBOOK_CONNECTIONS_UNION')) {
   const after = `      \`SELECT id, platform, display_name, handle, status, last_synced_at
        FROM social_connections
        WHERE workspace_id = ?
+         AND (status = 'connected' OR external_account_id IS NOT NULL)
        UNION ALL
        SELECT id, 'facebook' AS platform, display_name, handle, status, last_synced_at
        FROM facebook_connections
@@ -207,4 +208,6 @@ if (!index.includes('FACEBOOK_CONNECTIONS_UNION')) {
   fs.writeFileSync(indexPath, index);
 }
 
-console.log('Meta Facebook storage isolated and bootstrap aggregation applied.');
+console.log(meta.includes('META_SELECTION_V2')
+  ? 'Meta selection v2 preserved and Facebook bootstrap aggregation applied.'
+  : 'Meta Facebook storage isolated and bootstrap aggregation applied.');
