@@ -282,7 +282,7 @@ replaceOnce(
 
 replaceOnce(
 `          <div className="sc3-compose-summary"><span>{selectedIds.length} compte{selectedIds.length > 1 ? 's' : ''}</span><span>{selectedMedia ? '1 média' : 'Sans média'}</span><span>{body.length}/5000</span></div>`,
-`          <div className="sc3-compose-summary"><span>{selectedIds.length + plannedPlatforms.length} destination{selectedIds.length + plannedPlatforms.length > 1 ? 's' : ''}</span><span>{plannedPlatforms.length ? \`${plannedPlatforms.length} à connecter\` : 'Comptes reliés'}</span><span>{selectedMedia ? '1 média' : 'Sans média'}</span></div>`,
+`          <div className="sc3-compose-summary"><span>{selectedIds.length + plannedPlatforms.length} destination{selectedIds.length + plannedPlatforms.length > 1 ? 's' : ''}</span><span>{plannedPlatforms.length ? plannedPlatforms.length + ' à connecter' : 'Comptes reliés'}</span><span>{selectedMedia ? '1 média' : 'Sans média'}</span></div>`,
   'composer summary',
 );
 
