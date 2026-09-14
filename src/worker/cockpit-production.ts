@@ -8,6 +8,7 @@ import {
   PublishingError,
 } from './publishing';
 import { reschedulePublication } from './publishing-reschedule';
+import { updatePublication } from './publishing-update';
 import {
   abortMediaUpload,
   completeMediaUpload,
@@ -112,6 +113,27 @@ async function handlePublishingApi(request: Request, env: Env, url: URL): Promis
     }
 
     const match = url.pathname.match(/^\/api\/publications\/([^/]+)$/);
+    if (match && request.method === 'PUT') {
+      if (!roleCanMutate(auth.principal.role)) {
+        return Response.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, { status: 403 });
+      }
+      const publicationId = decodeURIComponent(match[1] ?? '');
+      const body = await request.json().catch(() => ({})) as {
+        body?: unknown;
+        mediaReference?: unknown;
+        scheduledAt?: unknown;
+        connectionIds?: unknown;
+        expectedVersion?: unknown;
+      };
+      const publication = await updatePublication(env.DB, auth.principal, publicationId, body);
+      await writeAuditLog(env.DB, auth.principal, 'publication.updated', 'content_post', publicationId, {
+        scheduledAt: publication.scheduledAt,
+        targetCount: publication.targets.length,
+        version: publication.version,
+      });
+      return Response.json({ publication });
+    }
+
     if (match && request.method === 'PATCH') {
       if (!roleCanMutate(auth.principal.role)) {
         return Response.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, { status: 403 });
