@@ -13,6 +13,7 @@ import './planner-quick-add.css';
 import './planner-drawer.css';
 import './drawer-hierarchy.css';
 import './drawer-v2.css';
+import './guided-composer.css';
 
 const DemoApp = lazy(() => import('./App'));
 
