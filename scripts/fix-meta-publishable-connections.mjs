@@ -1,4 +1,6 @@
 import './fix-meta-isolated-storage.mjs';
+import './fix-social-oauth-persistence.mjs';
+import './apply-meta-selection-v2.mjs';
 import fs from 'node:fs';
 
 const path = 'src/LiveAppV3.tsx';
