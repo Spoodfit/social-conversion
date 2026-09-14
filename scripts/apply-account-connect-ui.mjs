@@ -102,7 +102,7 @@ if (!source.includes('sc10-account-panel')) {
     'account panel props',
   );
 
-  const panelRegion = /function SettingsPage\([\s\S]*?(?=function PlannerPage\()/;
+  const panelRegion = /function SettingsPage\([\s\S]*?function AccountPanel\([\s\S]*?\n}\n(?=\nfunction )/;
   if (!panelRegion.test(source)) throw new Error('Account connect UI patch failed: settings/account region not found.');
   source = source.replace(panelRegion, `function SettingsPage({ session, connections, runtime, onConnect, onRefresh }: {
   session: SessionPayload;
@@ -170,7 +170,6 @@ function AccountPanel({ connections, ready, onClose, onConnect, onSwitch }: {
     </div>
   );
 }
-
 `);
 
   fs.writeFileSync(livePath, source);
