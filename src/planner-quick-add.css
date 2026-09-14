@@ -1,5 +1,12 @@
-.sc3-day-track{cursor:crosshair}
-.sc5-planner-quick-add{position:absolute;left:7px;right:7px;z-index:6;height:30px;transform:translateY(-50%);border:1px dashed #bdaef8;border-radius:9px;background:rgba(249,247,255,.96);color:#6431d6;display:flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 5px 14px rgba(83,49,177,.08);font-size:8px;font-weight:800;cursor:pointer;pointer-events:auto;backdrop-filter:blur(5px)}
-.sc5-planner-quick-add span{font-variant-numeric:tabular-nums;color:#7b6aa9}.sc5-planner-quick-add strong{font-size:8px}.sc5-planner-quick-add:hover{border-style:solid;background:#f3efff;box-shadow:0 7px 18px rgba(83,49,177,.13)}
-.sc3-agenda-card{cursor:pointer}.sc3-agenda-card:active{cursor:grabbing}
-@media(max-width:800px){.sc3-day-track{cursor:pointer}.sc5-planner-quick-add{height:34px}}
+.sc3-day-track{cursor:pointer}
+.sc5-planner-quick-add{position:absolute;left:8px;right:8px;z-index:6;height:22px;transform:translateY(-50%);border:0;background:transparent;color:#71649d;display:flex;align-items:center;justify-content:flex-start;gap:4px;padding:0 4px;font-size:7px;font-weight:800;cursor:pointer;pointer-events:auto;opacity:.42;transition:opacity .14s ease,background .14s ease}
+.sc5-planner-quick-add::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(103,49,215,.13);z-index:-1}
+.sc5-planner-quick-add svg{box-sizing:content-box;width:10px;height:10px;padding:2px;border-radius:999px;background:#fff;box-shadow:0 0 0 1px rgba(103,49,215,.12)}
+.sc5-planner-quick-add span{padding:2px 4px;border-radius:5px;background:rgba(255,255,255,.94);font-variant-numeric:tabular-nums;color:#8276a6}
+.sc5-planner-quick-add:hover{opacity:.82;background:rgba(249,247,255,.24)}
+.sc3-agenda-card{cursor:pointer;transition:box-shadow .14s ease,border-color .14s ease,transform .14s ease}
+.sc3-agenda-card:hover{box-shadow:0 4px 12px rgba(20,22,58,.08);transform:translateY(-1px)}
+.sc3-agenda-card:active{cursor:grabbing}
+.sc5-edit-hint{position:absolute;top:4px;right:4px;z-index:5;display:inline-flex;align-items:center;gap:3px;padding:3px 5px;border:1px solid rgba(219,220,229,.9);border-radius:6px;background:rgba(255,255,255,.92);color:#696d82;font-size:7px;font-weight:800;line-height:1;opacity:0;transform:translateY(-2px);transition:opacity .13s ease,transform .13s ease;pointer-events:none;box-shadow:0 2px 6px rgba(20,22,58,.05)}
+.sc3-agenda-card:hover .sc5-edit-hint{opacity:1;transform:translateY(0)}
+@media(max-width:800px){.sc5-planner-quick-add{height:26px;opacity:.55}.sc5-edit-hint{display:none}}
