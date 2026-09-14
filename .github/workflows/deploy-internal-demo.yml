@@ -1,10 +1,10 @@
-name: Deploy Social Conversion Internal Demo
+name: Deploy Social Conversion Validation
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Tape DEPLOY_DEMO pour confirmer le déploiement interne
+        description: Tape DEPLOY_VALIDATION pour confirmer la mise en ligne privée
         required: true
         type: string
 
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: social-conversion-internal-demo
+  group: social-conversion-validation
   cancel-in-progress: false
 
 jobs:
@@ -25,12 +25,12 @@ jobs:
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
-          if [ "$CONFIRMATION" != "DEPLOY_DEMO" ]; then
-            echo "Deployment cancelled: confirmation must be DEPLOY_DEMO"
+          if [ "$CONFIRMATION" != "DEPLOY_VALIDATION" ]; then
+            echo "Deployment cancelled: confirmation must be DEPLOY_VALIDATION"
             exit 1
           fi
 
-      - name: Check out current recovery candidate
+      - name: Check out current validation candidate
         uses: actions/checkout@v4
         with:
           ref: recovery/social-conversion-production
@@ -49,18 +49,20 @@ jobs:
           npm run verify
           npm run validate:production-config
 
-      - name: Enforce demo-only safety flags
+      - name: Enforce real validation flags and domain
         run: |
           node - <<'NODE'
           const fs = require('fs');
           const source = fs.readFileSync('wrangler.jsonc', 'utf8');
-          const demo = /"DEMO_MODE"\s*:\s*"true"/.test(source);
-          const liveOff = /"LIVE_READY"\s*:\s*"false"/.test(source);
-          if (!demo || !liveOff) {
-            console.error('Internal demo deployment blocked: DEMO_MODE must be true and LIVE_READY must be false.');
+          const demoOff = /"DEMO_MODE"\s*:\s*"false"/.test(source);
+          const liveOn = /"LIVE_READY"\s*:\s*"true"/.test(source);
+          const validationEnv = /"APP_ENV"\s*:\s*"validation"/.test(source);
+          const domain = /"pattern"\s*:\s*"social\.neptunebusiness\.com"/.test(source);
+          if (!demoOff || !liveOn || !validationEnv || !domain) {
+            console.error('Validation deployment blocked: expected APP_ENV=validation, DEMO_MODE=false, LIVE_READY=true and social.neptunebusiness.com.');
             process.exit(1);
           }
-          console.log('Demo-only safety flags validated.');
+          console.log('Private live validation configuration validated.');
           NODE
 
       - name: Apply pending D1 migrations
