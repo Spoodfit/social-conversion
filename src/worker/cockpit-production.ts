@@ -7,6 +7,7 @@ import {
   listPublications,
   PublishingError,
 } from './publishing';
+import { reschedulePublication } from './publishing-reschedule';
 
 function isLive(env: Env): boolean {
   return env.DEMO_MODE !== 'true' && String(env.LIVE_READY) === 'true';
@@ -87,6 +88,26 @@ async function handlePublishingApi(request: Request, env: Env, url: URL): Promis
     }
 
     const match = url.pathname.match(/^\/api\/publications\/([^/]+)$/);
+    if (match && request.method === 'PATCH') {
+      if (!roleCanMutate(auth.principal.role)) {
+        return Response.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, { status: 403 });
+      }
+      const publicationId = decodeURIComponent(match[1] ?? '');
+      const body = await request.json().catch(() => ({})) as { scheduledAt?: unknown; expectedVersion?: unknown };
+      const publication = await reschedulePublication(
+        env.DB,
+        auth.principal,
+        publicationId,
+        body.scheduledAt,
+        body.expectedVersion,
+      );
+      await writeAuditLog(env.DB, auth.principal, 'publication.rescheduled', 'content_post', publicationId, {
+        scheduledAt: publication.scheduledAt,
+        version: publication.version,
+      });
+      return Response.json({ publication });
+    }
+
     if (match && request.method === 'DELETE') {
       if (!roleCanMutate(auth.principal.role)) {
         return Response.json({ error: 'Mutation forbidden for this role.', code: 'ROLE_FORBIDDEN' }, { status: 403 });
