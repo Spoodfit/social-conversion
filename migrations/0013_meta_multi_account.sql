@@ -1,5 +1,10 @@
 PRAGMA defer_foreign_keys = ON;
 
+-- Preserve encrypted credentials before rebuilding the parent connection table.
+-- Dropping social_connections can trigger ON DELETE CASCADE on oauth_credentials.
+CREATE TABLE oauth_credentials_backup AS
+SELECT * FROM oauth_credentials;
+
 CREATE TABLE social_connections_next (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -25,7 +30,8 @@ FROM social_connections;
 DROP TABLE social_connections;
 ALTER TABLE social_connections_next RENAME TO social_connections;
 
-CREATE TABLE oauth_credentials_next (
+DROP TABLE IF EXISTS oauth_credentials;
+CREATE TABLE oauth_credentials (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
   connection_id TEXT NOT NULL REFERENCES social_connections(id) ON DELETE CASCADE,
@@ -46,17 +52,16 @@ CREATE TABLE oauth_credentials_next (
   UNIQUE (connection_id)
 );
 
-INSERT INTO oauth_credentials_next
+INSERT INTO oauth_credentials
   (id, workspace_id, connection_id, provider, access_token_ciphertext, access_token_iv, access_key_version,
    refresh_token_ciphertext, refresh_token_iv, refresh_key_version, scopes_json, access_expires_at,
    refresh_expires_at, last_refreshed_at, revoked_at, created_at, updated_at)
 SELECT id, workspace_id, connection_id, provider, access_token_ciphertext, access_token_iv, access_key_version,
        refresh_token_ciphertext, refresh_token_iv, refresh_key_version, scopes_json, access_expires_at,
        refresh_expires_at, last_refreshed_at, revoked_at, created_at, updated_at
-FROM oauth_credentials;
+FROM oauth_credentials_backup;
 
-DROP TABLE oauth_credentials;
-ALTER TABLE oauth_credentials_next RENAME TO oauth_credentials;
+DROP TABLE oauth_credentials_backup;
 CREATE INDEX idx_oauth_credentials_workspace_provider
   ON oauth_credentials(workspace_id, provider, revoked_at);
 
