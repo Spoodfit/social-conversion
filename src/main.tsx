@@ -10,6 +10,7 @@ import './social-fields.css';
 import './media-format-preview.css';
 import './create-library-dnd.css';
 import './planner-quick-add.css';
+import './planner-drawer.css';
 
 const DemoApp = lazy(() => import('./App'));
 
