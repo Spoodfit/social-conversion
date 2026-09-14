@@ -19,10 +19,11 @@
     "run_worker_first": ["/health", "/api/*", "/webhooks/*", "/oauth/*"]
   },
   "vars": {
-    "APP_ENV": "production",
-    "DEMO_MODE": "true",
-    "LIVE_READY": "false",
+    "APP_ENV": "validation",
+    "DEMO_MODE": "false",
+    "LIVE_READY": "true",
     "META_GRAPH_VERSION": "v24.0",
+    "INSTAGRAM_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/instagram/callback",
     "TEAM_DOMAIN": "https://neptune-business.cloudflareaccess.com",
     "POLICY_AUD": "34242650323f08b7d0ee045701f9b38b33b7e15009689e80253ffe6329111374"
   },
