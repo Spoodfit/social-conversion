@@ -47,6 +47,7 @@ describe('content publishing scheduler', () => {
     });
     expect(publication.targets).toHaveLength(2);
     expect(new Set(publication.targets.map((target) => target.connectionId))).toEqual(new Set([firstConnection, secondConnection]));
+    expect(publication.targets.every((target) => target.connected)).toBe(true);
 
     const listed = await listPublications(env.DB, 'default');
     expect(listed.publications.some((candidate) => candidate.id === publication.id)).toBe(true);
@@ -58,13 +59,82 @@ describe('content publishing scheduler', () => {
     expect(afterCancellation.publications.some((candidate) => candidate.id === publication.id)).toBe(false);
   });
 
-  it('fails closed when a selected social connection is not ready', async () => {
+  it('keeps a pending account usable in the Planner without claiming it can publish', async () => {
     const pendingConnection = await createConnection('pending');
 
-    await expect(createPublication(env.DB, principal(), {
-      body: 'Cette publication ne doit pas être acceptée',
+    const publication = await createPublication(env.DB, principal(), {
+      body: 'Préparée avant connexion complète',
       scheduledAt: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
       connectionIds: [pendingConnection],
-    })).rejects.toMatchObject({ code: 'CONNECTION_NOT_READY' });
+    });
+
+    expect(publication.targets).toHaveLength(1);
+    expect(publication.targets[0]).toMatchObject({
+      connectionId: pendingConnection,
+      platform: 'instagram',
+      status: 'planned',
+      connected: false,
+    });
+  });
+
+  it('creates a YouTube Planner item without any connected account and preserves YouTube fields', async () => {
+    const publication = await createPublication(env.DB, principal(), {
+      body: '',
+      scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1_000).toISOString(),
+      destinations: [{
+        platform: 'youtube',
+        accountLabel: 'YouTube Neptune',
+        format: 'video',
+        fields: {
+          title: 'Comment fonctionne Neptune Business ?',
+          description: 'Description complète de la vidéo',
+          tags: ['entrepreneuriat', 'réseau'],
+          privacyStatus: 'private',
+          madeForKids: false,
+        },
+      }],
+    });
+
+    expect(publication.body).toBe('Comment fonctionne Neptune Business ?');
+    expect(publication.targets[0]).toMatchObject({
+      platform: 'youtube',
+      displayName: 'YouTube Neptune',
+      format: 'video',
+      connected: false,
+      status: 'planned',
+    });
+    expect(publication.targets[0]?.fields).toMatchObject({
+      title: 'Comment fonctionne Neptune Business ?',
+      privacyStatus: 'private',
+      madeForKids: false,
+    });
+  });
+
+  it('stores TikTok-specific interaction settings independently', async () => {
+    const publication = await createPublication(env.DB, principal(), {
+      body: 'TikTok à préparer',
+      scheduledAt: new Date(Date.now() + 3 * 60 * 60 * 1_000).toISOString(),
+      destinations: [{
+        platform: 'tiktok',
+        accountLabel: 'TikTok Neptune',
+        format: 'video',
+        fields: {
+          title: 'TikTok à préparer #business',
+          privacyLevel: '',
+          allowComments: true,
+          allowDuet: false,
+          allowStitch: true,
+          coverTimestampMs: 2000,
+        },
+      }],
+    });
+
+    expect(publication.targets[0]?.fields).toMatchObject({
+      title: 'TikTok à préparer #business',
+      allowComments: true,
+      allowDuet: false,
+      allowStitch: true,
+      coverTimestampMs: 2000,
+    });
   });
 });
