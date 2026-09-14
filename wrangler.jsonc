@@ -8,7 +8,7 @@
   "preview_urls": false,
   "routes": [
     {
-      "pattern": "social-conversion.neptunebusiness.com",
+      "pattern": "social.neptunebusiness.com",
       "custom_domain": true
     }
   ],
