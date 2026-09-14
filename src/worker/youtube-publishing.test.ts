@@ -18,6 +18,16 @@ describe('YouTube publication metadata', () => {
     expect(metadata.status.containsSyntheticMedia).toBe(true);
   });
 
+  it('preserves the exact instant when a local schedule includes a timezone offset', () => {
+    const metadata = buildYouTubeMetadata({
+      title: 'Publication Paris',
+      privacyStatus: 'public',
+    }, '2026-09-15T08:00:00+02:00', Date.parse('2026-09-14T12:00:00.000Z'));
+
+    expect(metadata.status.privacyStatus).toBe('private');
+    expect(metadata.status.publishAt).toBe('2026-09-15T06:00:00.000Z');
+  });
+
   it('keeps an explicitly private video private without publishAt', () => {
     const metadata = buildYouTubeMetadata({
       title: 'Privée',
