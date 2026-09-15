@@ -26,7 +26,7 @@ function oauthEnv(): Env {
     TOKEN_ENCRYPTION_KEYRING: keyring(),
     INSTAGRAM_APP_ID: '123456789012345',
     INSTAGRAM_APP_SECRET: 'instagram-test-app-secret-never-store',
-    INSTAGRAM_REDIRECT_URI: 'https://social-conversion.neptunebusiness.com/oauth/instagram/callback',
+    INSTAGRAM_REDIRECT_URI: 'https://social.neptunebusiness.com/oauth/instagram/callback',
   } as unknown as Env;
 }
 
@@ -99,7 +99,7 @@ describe('Instagram Business Login OAuth', () => {
     expect(authUrl.origin).toBe('https://www.instagram.com');
     expect(authUrl.pathname).toBe('/oauth/authorize');
     expect(authUrl.searchParams.get('client_id')).toBe('123456789012345');
-    expect(authUrl.searchParams.get('redirect_uri')).toBe('https://social-conversion.neptunebusiness.com/oauth/instagram/callback');
+    expect(authUrl.searchParams.get('redirect_uri')).toBe('https://social.neptunebusiness.com/oauth/instagram/callback');
     expect(authUrl.searchParams.get('scope')).toContain('instagram_business_manage_messages');
     const state = authUrl.searchParams.get('state');
     expect(state).toBeTruthy();
@@ -131,7 +131,11 @@ describe('Instagram Business Login OAuth', () => {
       handle: '@neptune_test',
       status: 'connected',
     });
-    expect(JSON.parse(connection?.capabilities_json ?? '{}')).toMatchObject({ direct_messages: true, comments: true });
+    expect(JSON.parse(connection?.capabilities_json ?? '{}')).toMatchObject({
+      direct_messages: true,
+      comments: true,
+      webhook_subscribed: true,
+    });
 
     const stored = await env.DB.prepare(
       `SELECT access_token_ciphertext, scopes_json, revoked_at FROM oauth_credentials WHERE connection_id = ?`,
@@ -151,7 +155,7 @@ describe('Instagram Business Login OAuth', () => {
     expect(secondFetch).not.toHaveBeenCalled();
   });
 
-  it('fails closed if webhook subscription is not confirmed', async () => {
+  it('connects the account even when webhook activation must be deferred', async () => {
     const actor = await principal();
     const started = await startInstagramOAuth(env.DB, oauthEnv(), actor);
     const state = new URL(started.url).searchParams.get('state') ?? '';
@@ -163,18 +167,32 @@ describe('Instagram Business Login OAuth', () => {
       return Response.json({ success: false });
     });
 
-    await expect(completeInstagramOAuth(env.DB, oauthEnv(), {
+    const completed = await completeInstagramOAuth(env.DB, oauthEnv(), {
       state,
       code: 'oauth-code-test',
-    }, fetchMock)).rejects.toMatchObject({ code: 'OAUTH_WEBHOOK_SUBSCRIPTION_FAILED' });
+    }, fetchMock);
+    expect(completed).toMatchObject({
+      connectionId: started.connectionId,
+      accountId: '17890001234567891',
+      username: 'neptune_test_subscription',
+    });
+
     const connection = await env.DB.prepare(
-      'SELECT status FROM social_connections WHERE id = ?',
-    ).bind(started.connectionId).first<{ status: string }>();
-    expect(connection?.status).toBe('pending');
+      'SELECT status, capabilities_json FROM social_connections WHERE id = ?',
+    ).bind(started.connectionId).first<{ status: string; capabilities_json: string }>();
+    expect(connection?.status).toBe('connected');
+    expect(JSON.parse(connection?.capabilities_json ?? '{}')).toMatchObject({
+      direct_messages: false,
+      comments: false,
+      content_publish: true,
+      webhook_subscribed: false,
+    });
+
     const credential = await env.DB.prepare(
-      'SELECT id FROM oauth_credentials WHERE connection_id = ?',
-    ).bind(started.connectionId).first<{ id: string }>();
-    expect(credential).toBeNull();
+      'SELECT id, revoked_at FROM oauth_credentials WHERE connection_id = ?',
+    ).bind(started.connectionId).first<{ id: string; revoked_at: string | null }>();
+    expect(credential?.id).toBeTruthy();
+    expect(credential?.revoked_at).toBeNull();
   });
 
   it('refreshes encrypted long-lived tokens near expiry without storing plaintext', async () => {
