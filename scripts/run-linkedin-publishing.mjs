@@ -23,3 +23,5 @@ try {
     fs.writeFileSync(fieldsPath, fields);
   }
 }
+
+await import('./fix-linkedin-publishing-generated.mjs');
