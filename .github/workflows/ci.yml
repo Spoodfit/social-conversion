@@ -38,7 +38,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: typecheck-diagnostics
-          path: typecheck.log
+          path: |
+            typecheck.log
+            src/LiveAppV3.tsx
+            src/shared/social-publication-fields.ts
+            src/PlatformDestinationEditor.tsx
+            src/worker/publishing.ts
+            src/worker/publishing-update.ts
+            src/worker/publishing-destinations.ts
+            src/worker/youtube-publishing.ts
+            src/worker/cockpit-production.ts
           if-no-files-found: ignore
       - name: Worker tests
         run: npm test
