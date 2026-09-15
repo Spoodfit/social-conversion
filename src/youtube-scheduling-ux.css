@@ -1,0 +1,133 @@
+.sc12-youtube-schedule-choice {
+  margin: 14px 0 4px;
+  padding: 16px;
+  border: 1px solid #e4e5ef;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.sc12-choice-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.sc12-choice-head strong {
+  color: #14163a;
+  font-size: 14px;
+}
+
+.sc12-choice-head small {
+  color: #757892;
+  font-size: 12px;
+}
+
+.sc12-choice-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sc12-choice-options > button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 10px;
+  min-height: 94px;
+  padding: 13px;
+  text-align: left;
+  border: 1px solid #e1e2ed;
+  border-radius: 14px;
+  background: #fafaff;
+  color: #14163a;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.sc12-choice-options > button:hover {
+  border-color: #bfc2d8;
+  transform: translateY(-1px);
+}
+
+.sc12-choice-options > button.active {
+  border-color: #8a36f5;
+  background: #f8f3ff;
+  box-shadow: 0 0 0 2px rgba(138, 54, 245, 0.08);
+}
+
+.sc12-choice-options > button > span:first-child {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sc12-choice-options > button > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sc12-choice-options strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.sc12-choice-options small {
+  color: #73768e;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sc12-choice-options button.active > svg {
+  color: #8a36f5;
+}
+
+.sc12-schedule-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: #f6f7fb;
+  color: #4d5069;
+}
+
+.sc12-schedule-confirm > span {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  width: 100%;
+}
+
+.sc12-schedule-confirm small {
+  grid-column: 1 / -1;
+  color: #83869b;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sc12-schedule-confirm strong {
+  color: #14163a;
+  font-size: 12px;
+}
+
+.sc12-schedule-confirm em,
+.sc12-timezone {
+  color: #74778d;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.sc9-validate-card .sc12-timezone,
+.sc8-hero-time .sc12-timezone {
+  display: block;
+  margin-top: 3px;
+}
+
+@media (max-width: 720px) {
+  .sc12-choice-options {
+    grid-template-columns: 1fr;
+  }
+}

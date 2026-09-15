@@ -1,0 +1,19 @@
+.sc16-account-panel{max-height:min(760px,calc(100vh - 36px));overflow:auto}
+.sc16-all-accounts{transition:border-color .15s ease,background .15s ease,box-shadow .15s ease}
+.sc16-all-accounts:hover{border-color:#c9baf8!important;background:#f5f1ff!important}
+.sc16-all-accounts.is-active{border-color:#a88cf4!important;background:#f3efff!important;box-shadow:0 0 0 2px rgba(138,54,245,.07)}
+.sc16-selected{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;background:#ebe5ff;color:#6f35d5;font-size:7px;font-weight:900;white-space:nowrap}
+.sc16-section-title{padding:7px 14px 6px;display:flex;align-items:center;gap:6px;color:#85899c;font-size:8px;font-weight:900;letter-spacing:.055em;text-transform:uppercase}
+.sc16-section-title span{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#f1f1f5;color:#6f7386;display:inline-flex;align-items:center;justify-content:center;font-size:7px;letter-spacing:0}
+.sc16-section-title.warning{padding-top:14px;color:#9a714d}.sc16-section-title.warning span{background:#fff4e9;color:#9a714d}
+.sc16-connected-list>button{grid-template-columns:34px minmax(0,1fr) auto!important;transition:border-color .15s ease,background .15s ease,box-shadow .15s ease}
+.sc16-connected-list>button.is-active{border-color:#aa91f4;background:#faf8ff;box-shadow:0 0 0 2px rgba(138,54,245,.06)}
+.sc16-connected-list>button.is-active:hover{border-color:#956fe9;background:#f8f5ff}
+.sc16-account-status{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;background:#eefaf3;color:#32835b;font-size:7px;font-weight:900;white-space:nowrap}
+.sc16-account-status.is-active{background:#ebe5ff;color:#6c32d0}.sc16-account-status.warning{background:#fff1e4;color:#a46935}
+.sc16-empty{margin:0 14px 6px;padding:15px;border:1px dashed #e1e2e9;border-radius:12px;color:#9295a5;text-align:center;font-size:9px}
+.sc16-reconnect-list>button{border-color:#efe4d5;background:#fffaf4}.sc16-reconnect-list>button:disabled{opacity:.58;cursor:not-allowed}
+.sc16-add-account{margin-top:16px}.sc16-add-account small{line-height:1.35}
+.sc16-add-intro{padding-bottom:14px}.sc16-add-intro small{max-width:390px}
+.sc16-provider-list>button{min-height:72px}.sc16-provider-list small{line-height:1.35}.sc16-provider-list strong{font-size:11px}
+@media(max-width:640px){.sc16-account-panel{max-height:88vh}.sc16-selected{padding:5px 6px}.sc16-all-accounts{grid-template-columns:34px minmax(0,1fr) auto!important}.sc16-connected-list>button{grid-template-columns:34px minmax(0,1fr) auto!important}.sc16-section-title{padding-left:14px;padding-right:14px}}
