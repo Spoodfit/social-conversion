@@ -157,10 +157,10 @@ if (!sync.includes('SC_FACEBOOK_INBOX_DRAWER_PREVIEW_V1')) {
 
   sync = replaceOnce(
     sync,
-`    ` + '`' + `SELECT rp.id, rp.connection_id, rp.external_id, rp.body, rp.media_type, rp.external_url,
-            rp.event_at, rp.created_at, rp.updated_at, fc.display_name, fc.handle` + '`' + `,`,
-`    ` + '`' + `SELECT rp.id, rp.connection_id, rp.external_id, rp.body, rp.media_type, rp.external_url, rp.preview_url,
-            rp.event_at, rp.created_at, rp.updated_at, fc.display_name, fc.handle` + '`' + `,`,
+`rp.media_type, rp.external_url,
+            rp.event_at`,
+`rp.media_type, rp.external_url, rp.preview_url,
+            rp.event_at`,
     'Facebook Planner preview select',
   );
 
