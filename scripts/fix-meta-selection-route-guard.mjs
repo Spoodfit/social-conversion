@@ -30,15 +30,20 @@ function ensureSelectionHandler() {
 }
 
 function ensureSelectionRoute() {
-  if (source.includes("url.pathname.match(/^\\/api\\/oauth\\/meta\\/selection\\/")) return;
+  const unsafeRoute = `    const metaSelection = url.pathname.match(/^\\/api\\/oauth\\/meta\\/selection\\/([0-9a-f-]{36})$/i);\n    if (metaSelection && (request.method === 'GET' || request.method === 'POST')) {\n      return handleMetaSelection(request, env, metaSelection[1]);\n    }`;
+  const safeRoute = `    const metaSelection = url.pathname.match(/^\\/api\\/oauth\\/meta\\/selection\\/([0-9a-f-]{36})$/i);\n    const metaSelectionId = metaSelection?.[1];\n    if (metaSelectionId && (request.method === 'GET' || request.method === 'POST')) {\n      return handleMetaSelection(request, env, metaSelectionId);\n    }`;
+
+  if (source.includes(unsafeRoute)) {
+    source = source.replace(unsafeRoute, safeRoute);
+  }
+  if (source.includes('const metaSelectionId = metaSelection?.[1];')) return;
 
   const anchor = `    const socialStart = url.pathname.match(/^\\/api\\/oauth\\/(youtube|tiktok)\\/start$/);`;
   if (!source.includes(anchor)) {
     throw new Error('Meta selection route guard failed: social OAuth dispatch anchor not found.');
   }
 
-  const route = `    const metaSelection = url.pathname.match(/^\\/api\\/oauth\\/meta\\/selection\\/([0-9a-f-]{36})$/i);\n    if (metaSelection && (request.method === 'GET' || request.method === 'POST')) {\n      return handleMetaSelection(request, env, metaSelection[1]);\n    }\n`;
-  source = source.replace(anchor, route + anchor);
+  source = source.replace(anchor, safeRoute + '\n' + anchor);
 }
 
 ensureMetaImports();
@@ -47,7 +52,7 @@ ensureSelectionRoute();
 
 const requiredFragments = [
   'async function handleMetaSelection(',
-  "url.pathname.match(/^\\/api\\/oauth\\/meta\\/selection\\/",
+  'const metaSelectionId = metaSelection?.[1];',
   'getMetaSelection(env.DB, env, auth.principal, selectionId)',
   'completeMetaSelection(env.DB, env, auth.principal, selectionId, assetKeys)',
 ];
