@@ -26,7 +26,8 @@
     "patch:meta-publishable": "node scripts/fix-meta-publishable-connections.mjs",
     "patch:legal-pages": "node scripts/apply-public-legal-pages.mjs",
     "patch:instagram-direct-oauth": "node scripts/fix-instagram-direct-oauth.mjs",
-    "patch:ui": "npm run patch:social-oauth && npm run patch:social-copy-route && npm run patch:safe-editor && npm run patch:platform-planner && npm run patch:media-previews && npm run patch:create-dnd && npm run patch:planner-quick-add && npm run patch:planner-drawer && npm run patch:stabilize-drawer && npm run patch:drawer-hierarchy && npm run patch:drawer-v2 && npm run patch:guided-composer && npm run patch:social-copy-assistant && npm run patch:account-connect-ui && npm run patch:youtube-publishing && npm run patch:youtube-scheduling-ux && npm run patch:planner-publication-status && npm run patch:planner-readiness-status && npm run patch:meta-oauth && npm run patch:meta-publishable && npm run patch:legal-pages && npm run patch:instagram-direct-oauth",
+    "patch:instagram-publish-scope": "node scripts/fix-instagram-direct-publish-scope.mjs",
+    "patch:ui": "npm run patch:social-oauth && npm run patch:social-copy-route && npm run patch:safe-editor && npm run patch:platform-planner && npm run patch:media-previews && npm run patch:create-dnd && npm run patch:planner-quick-add && npm run patch:planner-drawer && npm run patch:stabilize-drawer && npm run patch:drawer-hierarchy && npm run patch:drawer-v2 && npm run patch:guided-composer && npm run patch:social-copy-assistant && npm run patch:account-connect-ui && npm run patch:youtube-publishing && npm run patch:youtube-scheduling-ux && npm run patch:planner-publication-status && npm run patch:planner-readiness-status && npm run patch:meta-oauth && npm run patch:meta-publishable && npm run patch:legal-pages && npm run patch:instagram-direct-oauth && npm run patch:instagram-publish-scope",
     "predev": "npm run patch:ui",
     "dev": "vite",
     "dev:ui": "vite --config vite.client.config.ts",
@@ -48,7 +49,7 @@
     "jose": "6.2.8",
     "lucide-react": "1.29.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.51.0",
