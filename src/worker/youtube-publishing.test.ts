@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildYouTubeMetadata, isYouTubeSyncEnvelope } from './youtube-publishing';
+import { buildYouTubeMetadata, isYouTubeSyncEnvelope, YouTubePublishingError } from './youtube-publishing';
 
 describe('YouTube publication metadata', () => {
   it('schedules a future public video as private with publishAt', () => {
@@ -15,6 +15,7 @@ describe('YouTube publication metadata', () => {
     expect(metadata.snippet.title).toBe('Mon Short');
     expect(metadata.status.privacyStatus).toBe('private');
     expect(metadata.status.publishAt).toBe('2026-09-16T08:00:00.000Z');
+    expect(metadata.status.selfDeclaredMadeForKids).toBe(false);
     expect(metadata.status.containsSyntheticMedia).toBe(true);
   });
 
@@ -22,6 +23,7 @@ describe('YouTube publication metadata', () => {
     const metadata = buildYouTubeMetadata({
       title: 'Publication Paris',
       privacyStatus: 'public',
+      madeForKids: false,
     }, '2026-09-15T08:00:00+02:00', Date.parse('2026-09-14T12:00:00.000Z'));
 
     expect(metadata.status.privacyStatus).toBe('private');
@@ -32,10 +34,19 @@ describe('YouTube publication metadata', () => {
     const metadata = buildYouTubeMetadata({
       title: 'Privée',
       privacyStatus: 'private',
+      madeForKids: false,
     }, '2026-09-16T08:00:00.000Z', Date.parse('2026-09-14T12:00:00.000Z'));
 
     expect(metadata.status.privacyStatus).toBe('private');
     expect(metadata.status.publishAt).toBeUndefined();
+  });
+
+  it('refuses to publish when the audience declaration is missing', () => {
+    expect(() => buildYouTubeMetadata({
+      title: 'Audience à compléter',
+      privacyStatus: 'private',
+    }, '2026-09-16T08:00:00.000Z', Date.parse('2026-09-14T12:00:00.000Z')))
+      .toThrowError(YouTubePublishingError);
   });
 
   it('recognizes only valid queue envelopes', () => {
