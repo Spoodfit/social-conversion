@@ -4,3 +4,5 @@ TOKEN_ENCRYPTION_KEYRING='{"active":"v1","keys":{"v1":"replace-with-base64-encod
 OPENAI_API_KEY="replace-me"
 YOUTUBE_API_KEY="replace-me"
 TIKTOK_CLIENT_SECRET="replace-me"
+LINKEDIN_CLIENT_ID="replace-me"
+LINKEDIN_CLIENT_SECRET="replace-me"
