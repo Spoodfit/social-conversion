@@ -1,20 +1,6 @@
 import fs from 'node:fs';
 
-function replaceOnce(source, before, after, label) {
-  if (source.includes(after)) return source;
-  if (!source.includes(before)) throw new Error(`Facebook runtime sync patch failed: ${label} anchor not found.`);
-  return source.replace(before, after);
-}
-
-// Shared/provider types must recognize Facebook as a first-class platform.
-const sharedPath = 'src/shared/types.ts';
-let shared = fs.readFileSync(sharedPath, 'utf8');
-shared = shared.replace(
-  "export type Platform = 'instagram' | 'youtube' | 'tiktok';",
-  "export type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok';",
-);
-fs.writeFileSync(sharedPath, shared);
-
+// Facebook tokens are stored outside oauth_credentials but share the same crypto context type.
 const tokenPath = 'src/worker/token-vault.ts';
 let token = fs.readFileSync(tokenPath, 'utf8');
 token = token.replace(
@@ -87,25 +73,33 @@ if (production.includes(scheduledAnchor) && !production.includes("event: 'facebo
 production += production.includes('SC_FACEBOOK_RUNTIME_CRON_V1') ? '' : '\n// SC_FACEBOOK_RUNTIME_CRON_V1\n';
 fs.writeFileSync(productionPath, production);
 
-// UI: Facebook must render as Facebook rather than falling through to TikTok.
+// UI: keep Facebook out of publishing platform types but allow it for connected accounts and Inbox.
 const appPath = 'src/LiveAppV3.tsx';
 let app = fs.readFileSync(appPath, 'utf8');
-app = app.replace(
-  "type SocialPlatform = 'instagram' | 'youtube' | 'tiktok';",
-  "type SocialPlatform = 'instagram' | 'facebook' | 'youtube' | 'tiktok';",
-);
-app = replaceOnce(
-  app,
-  `function platformLabel(platform: SocialPlatform) {\n  if (platform === 'instagram') return 'Instagram';\n  if (platform === 'youtube') return 'YouTube';\n  return 'TikTok';\n}`,
-  `function platformLabel(platform: SocialPlatform) {\n  if (platform === 'instagram') return 'Instagram';\n  if (platform === 'facebook') return 'Facebook';\n  if (platform === 'youtube') return 'YouTube';\n  return 'TikTok';\n}`,
-  'platform label',
-);
-app = replaceOnce(
-  app,
-  `  const icon = platform === 'instagram'\n    ? <Camera size={size} />\n    : platform === 'youtube'\n      ? <Video size={size} />\n      : <Music2 size={size} />;`,
-  `  const icon = platform === 'instagram'\n    ? <Camera size={size} />\n    : platform === 'facebook'\n      ? <MessageCircle size={size} />\n      : platform === 'youtube'\n        ? <Video size={size} />\n        : <Music2 size={size} />;`,
-  'Facebook platform mark',
-);
+if (!app.includes("type ConnectedPlatform = SocialPlatform | 'facebook';")) {
+  const socialType = "type SocialPlatform = 'instagram' | 'youtube' | 'tiktok';";
+  if (!app.includes(socialType)) throw new Error('Facebook runtime sync patch failed: SocialPlatform type anchor missing.');
+  app = app.replace(socialType, `${socialType}\ntype ConnectedPlatform = SocialPlatform | 'facebook';`);
+}
+app = app.replaceAll('platform: SocialPlatform;\n  displayName:', 'platform: ConnectedPlatform;\n  displayName:');
+app = app.replaceAll('platform: SocialPlatform;\n  accountName?:', 'platform: ConnectedPlatform;\n  accountName?:');
+app = app.replace('function platformLabel(platform: SocialPlatform) {', 'function platformLabel(platform: ConnectedPlatform) {');
+app = app.replace('function PlatformMark({ platform, size = 16 }: { platform: SocialPlatform; size?: number }) {', 'function PlatformMark({ platform, size = 16 }: { platform: ConnectedPlatform; size?: number }) {');
+if (!app.includes("if (platform === 'facebook') return 'Facebook';")) {
+  app = app.replace(
+    "  if (platform === 'instagram') return 'Instagram';",
+    "  if (platform === 'instagram') return 'Instagram';\n  if (platform === 'facebook') return 'Facebook';",
+  );
+}
+if (!app.includes("platform === 'facebook'\n    ? <MessageCircle")) {
+  app = app.replace(
+    "  const icon = platform === 'instagram'",
+    "  const icon = platform === 'facebook'\n    ? <MessageCircle size={size} />\n    : platform === 'instagram'",
+  );
+}
+if (!app.includes("if (platform === 'facebook') return 'Facebook';")) {
+  throw new Error('Facebook runtime sync patch failed: Facebook label was not applied.');
+}
 app += app.includes('SC_FACEBOOK_RUNTIME_UI_V1') ? '' : '\n/* SC_FACEBOOK_RUNTIME_UI_V1 */\n';
 fs.writeFileSync(appPath, app);
 
