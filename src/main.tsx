@@ -11,6 +11,7 @@ import './media-format-preview.css';
 import './create-library-dnd.css';
 import './planner-quick-add.css';
 import './planner-drawer.css';
+import './facebook-preview-v2.css';
 import './drawer-hierarchy.css';
 import './drawer-v2.css';
 import './guided-composer.css';
