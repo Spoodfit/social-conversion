@@ -75,42 +75,4 @@ if (!production.includes('INSTAGRAM_OAUTH_REDIRECT_DIAGNOSTICS_V1')) {
   fs.writeFileSync(productionPath, production);
 }
 
-// 3) Show the actionable reason in the UI after returning from Instagram.
-const livePath = 'src/LiveAppV3.tsx';
-let live = fs.readFileSync(livePath, 'utf8');
-if (!live.includes('SC_INSTAGRAM_OAUTH_FEEDBACK_V1')) {
-  const oauthEffect = live.indexOf("const oauth = current.searchParams.get('oauth');");
-  const feedbackStart = live.indexOf('    const platform = match[1] as SocialPlatform;', oauthEffect);
-  const deleteMarker = "    current.searchParams.delete('oauth');";
-  const feedbackEnd = live.indexOf(deleteMarker, feedbackStart);
-  if (oauthEffect < 0 || feedbackStart < 0 || feedbackEnd < 0) {
-    throw new Error('Instagram OAuth diagnostics patch failed: OAuth callback UI feedback boundaries not found.');
-  }
-
-  const feedback = `    const platform = match[1] as SocialPlatform;
-    const outcome = match[2];
-    const oauthError = current.searchParams.get('oauth_error') || '';
-    const oauthErrorMessage: Record<string, string> = {
-      PROVIDER_ACCESS_DENIED: 'L’autorisation a été refusée dans Instagram.',
-      PROVIDER_USER_DENIED: 'L’autorisation a été refusée dans Instagram.',
-      PROVIDER_INVALID_CALLBACK: 'Instagram n’a pas renvoyé une autorisation complète.',
-      OAUTH_STATE_EXPIRED: 'La tentative de connexion a expiré. Relancez la connexion.',
-      INVALID_OAUTH_STATE: 'La tentative de connexion n’est plus valide. Relancez la connexion.',
-      CONNECTION_NOT_FOUND: 'La connexion temporaire n’existe plus. Relancez la connexion.',
-      OAUTH_PROVIDER_FAILED: 'Instagram a refusé une étape de l’autorisation ou de l’échange de jeton.',
-      OAUTH_PROFILE_INVALID: 'Instagram n’a pas pu valider ce compte professionnel.',
-      OAUTH_NOT_CONFIGURED: 'La configuration Instagram du serveur est incomplète.',
-      UNKNOWN: 'Une erreur interne est survenue pendant la connexion.',
-    };
-    setToast(outcome === 'connected'
-      ? platformLabel(platform) + ' est connecté.'
-      : (oauthErrorMessage[oauthError] || ('La connexion ' + platformLabel(platform) + ' n’a pas abouti.')) + (oauthError ? ' [' + oauthError + ']' : ''));
-    current.searchParams.delete('oauth');
-    current.searchParams.delete('oauth_error');`;
-
-  live = live.slice(0, feedbackStart) + feedback + live.slice(feedbackEnd + deleteMarker.length);
-  live += '\n/* SC_INSTAGRAM_OAUTH_FEEDBACK_V1 */\n';
-  fs.writeFileSync(livePath, live);
-}
-
-console.log('Instagram OAuth login hardening and actionable diagnostics applied.');
+console.log('Instagram OAuth login hardening and safe provider diagnostics applied.');
