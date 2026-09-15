@@ -42,7 +42,7 @@ if (!sync.includes('SC_FACEBOOK_COMMENT_IMPORT_V2')) {
       payload = await graphGet<GraphPage<FacebookComment>>(fetchImpl, url.toString(), token);
     } catch (error) {
       // Meta can expose the comment body while withholding the author identity.
-      // Retry without asking for `from` instead of making the entire Inbox empty.
+      // Retry without asking for the from field instead of making the entire Inbox empty.
       const fallbackUrl = new URL(url.toString());
       fallbackUrl.searchParams.set('fields', 'id,message,created_time');
       try {
@@ -62,7 +62,7 @@ if (!sync.includes('SC_FACEBOOK_COMMENT_IMPORT_V2')) {
       if (!id || !body || !occurredAt) continue;
       if (authorId && authorId === connection.external_account_id) continue;
 
-      // Recent Graph API responses may omit `from` for a user's comment even when
+      // Recent Graph API responses may omit the from field for a user's comment even when
       // the Page is allowed to read the comment itself. Keep a stable synthetic
       // contact id so the comment still appears and remains idempotent.
       const externalContactId = authorId || \`commenter:\${id}\`;
