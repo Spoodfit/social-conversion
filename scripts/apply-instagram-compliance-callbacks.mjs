@@ -12,13 +12,13 @@ const dispatchAnchor = 'async function dispatchPending(env: Env): Promise<number
 if (!source.includes(dispatchAnchor)) throw new Error('Instagram compliance callbacks patch failed: dispatch anchor not found.');
 
 const complianceCode = String.raw`
-function decodeBase64Url(value: string): Uint8Array {
+function decodeBase64Url(value: string): ArrayBuffer {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
   const decoded = atob(padded);
   const bytes = new Uint8Array(decoded.length);
   for (let index = 0; index < decoded.length; index += 1) bytes[index] = decoded.charCodeAt(index);
-  return bytes;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 async function instagramSignedRequestUserId(request: Request, env: Env): Promise<string | undefined> {
