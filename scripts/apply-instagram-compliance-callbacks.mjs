@@ -65,17 +65,14 @@ async function handleInstagramDeauthorize(request: Request, env: Env): Promise<R
 
   const now = new Date().toISOString();
   await env.DB.prepare(
-    `UPDATE oauth_credentials
-     SET revoked_at = COALESCE(revoked_at, ?), updated_at = ?
-     WHERE provider = 'instagram'
-       AND connection_id IN (
-         SELECT id FROM social_connections WHERE platform = 'instagram' AND external_account_id = ?
-       )`,
+    "UPDATE oauth_credentials " +
+    "SET revoked_at = COALESCE(revoked_at, ?), updated_at = ? " +
+    "WHERE provider = 'instagram' " +
+    "AND connection_id IN (SELECT id FROM social_connections WHERE platform = 'instagram' AND external_account_id = ?)",
   ).bind(now, now, userId).run();
   await env.DB.prepare(
-    `UPDATE social_connections
-     SET status = 'disconnected', updated_at = ?
-     WHERE platform = 'instagram' AND external_account_id = ?`,
+    "UPDATE social_connections SET status = 'disconnected', updated_at = ? " +
+    "WHERE platform = 'instagram' AND external_account_id = ?",
   ).bind(now, userId).run();
 
   console.log(JSON.stringify({ event: 'instagram_deauthorized', accountId: userId }));
@@ -87,50 +84,40 @@ async function handleInstagramDataDeletion(request: Request, env: Env): Promise<
   if (!userId) return Response.json({ error: 'Invalid signed request.' }, { status: 400 });
 
   const now = new Date().toISOString();
-  const confirmation = `igdel_${crypto.randomUUID().replace(/-/g, '')}`;
+  const confirmation = 'igdel_' + crypto.randomUUID().replace(/-/g, '');
   const connections = await env.DB.prepare(
-    `SELECT id, workspace_id
-     FROM social_connections
-     WHERE platform = 'instagram' AND external_account_id = ?`,
+    "SELECT id, workspace_id FROM social_connections " +
+    "WHERE platform = 'instagram' AND external_account_id = ?",
   ).bind(userId).all<{ id: string; workspace_id: string }>();
 
   for (const connection of connections.results) {
     await env.DB.prepare(
-      `INSERT INTO privacy_requests
-        (id, workspace_id, contact_id, request_type, status, requested_by, requested_at, completed_at, result_reference, notes)
-       VALUES (?, ?, NULL, 'delete', 'completed', 'instagram_data_deletion', ?, ?, ?, ?)`,
+      "INSERT INTO privacy_requests " +
+      "(id, workspace_id, contact_id, request_type, status, requested_by, requested_at, completed_at, result_reference, notes) " +
+      "VALUES (?, ?, NULL, 'delete', 'completed', 'instagram_data_deletion', ?, ?, ?, ?)",
     ).bind(
       crypto.randomUUID(),
       connection.workspace_id,
       now,
       now,
       confirmation,
-      `Instagram data deletion callback for connection ${connection.id}`,
+      'Instagram data deletion callback for connection ' + connection.id,
     ).run();
   }
 
   await env.DB.prepare(
-    `DELETE FROM oauth_credentials
-     WHERE provider = 'instagram'
-       AND connection_id IN (
-         SELECT id FROM social_connections WHERE platform = 'instagram' AND external_account_id = ?
-       )`,
+    "DELETE FROM oauth_credentials WHERE provider = 'instagram' " +
+    "AND connection_id IN (SELECT id FROM social_connections WHERE platform = 'instagram' AND external_account_id = ?)",
   ).bind(userId).run();
   await env.DB.prepare(
-    `UPDATE social_connections
-     SET external_account_id = NULL,
-         display_name = 'Instagram',
-         handle = NULL,
-         status = 'disconnected',
-         capabilities_json = '{}',
-         last_synced_at = NULL,
-         updated_at = ?
-     WHERE platform = 'instagram' AND external_account_id = ?`,
+    "UPDATE social_connections SET external_account_id = NULL, display_name = 'Instagram', handle = NULL, " +
+    "status = 'disconnected', capabilities_json = '{}', last_synced_at = NULL, updated_at = ? " +
+    "WHERE platform = 'instagram' AND external_account_id = ?",
   ).bind(now, userId).run();
 
   console.log(JSON.stringify({ event: 'instagram_data_deleted', confirmationCode: confirmation }));
   return Response.json({
-    url: `https://social.neptunebusiness.com/data-deletion?confirmation=${encodeURIComponent(confirmation)}`,
+    url: 'https://social.neptunebusiness.com/data-deletion?confirmation=' + encodeURIComponent(confirmation),
     confirmation_code: confirmation,
   }, { headers: { 'cache-control': 'no-store' } });
 }
