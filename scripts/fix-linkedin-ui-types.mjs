@@ -2,8 +2,20 @@ import fs from 'node:fs';
 
 const path = 'src/LiveAppV3.tsx';
 let source = fs.readFileSync(path, 'utf8');
+const original = source;
+
+const canonicalConnectedType = "type ConnectedPlatform = SocialPlatform | 'facebook' | 'linkedin';";
+source = source.replace(
+  "type ConnectedPlatform = SocialPlatform | 'facebook';\n" + canonicalConnectedType,
+  canonicalConnectedType,
+);
+source = source.replace(
+  canonicalConnectedType + "\ntype ConnectedPlatform = SocialPlatform | 'facebook';",
+  canonicalConnectedType,
+);
 
 if (source.includes('SC_LINKEDIN_UI_TYPES_V2')) {
+  if (source !== original) fs.writeFileSync(path, source);
   console.log('LinkedIn UI type routing already finalized.');
   process.exit(0);
 }
