@@ -63,7 +63,7 @@ if (!source.includes('SC_FACEBOOK_COMMENT_IMPORT_V3')) {
 "  let next: string | undefined = initial.toString();",
 "  const comments: FacebookComment[] = [];",
 "  for (let page = 0; next && page < 3; page += 1) {",
-"    const payload = await graphGet<GraphPage<FacebookComment>>(fetchImpl, next, token);",
+"    const payload: GraphPage<FacebookComment> = await graphGet<GraphPage<FacebookComment>>(fetchImpl, next, token);",
 "    if (Array.isArray(payload.data)) comments.push(...payload.data);",
 "    next = typeof payload.paging?.next === 'string' && payload.paging.next.startsWith('https://')",
 "      ? payload.paging.next",
