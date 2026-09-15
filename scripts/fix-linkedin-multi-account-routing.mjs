@@ -51,4 +51,9 @@ if (!source.includes('SC_LINKEDIN_MULTI_ACCOUNT_ROUTING_V1')) {
 }
 
 if (source !== original) fs.writeFileSync(path, source);
-console.log('LinkedIn add-account routing now supports repeated profile connections.');
+
+// Keep LinkedIn publishing as the final generated patch. This prevents older Facebook
+// and account-switcher patches from re-excluding LinkedIn from Planner destinations.
+await import('./enable-linkedin-publishing.mjs');
+
+console.log('LinkedIn add-account routing and publishing are finalized.');
