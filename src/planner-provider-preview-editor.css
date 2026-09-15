@@ -1,0 +1,97 @@
+.sc15-month-day {
+  min-height: 205px;
+}
+
+.sc15-month-post {
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  min-height: 54px;
+  padding: 4px 6px 4px 4px;
+}
+
+.sc15-month-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 9px;
+  background: #f2f3f8;
+}
+
+.sc15-month-thumb img,
+.sc3-list-thumb img,
+.sc6-stack-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sc15-month-copy strong {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  white-space: normal;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sc15-month-post.provider .sc15-month-thumb {
+  box-shadow: inset 0 0 0 1px #ececf5;
+}
+
+.sc16-provider-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 42px;
+  margin-top: 8px;
+  border: 1px solid #e2e4ed;
+  border-radius: 11px;
+  background: #fff;
+  color: #252946;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sc16-provider-link:hover {
+  border-color: #cfd2e3;
+  background: #fafaff;
+}
+
+.sc16-provider-limit {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 9px 10px;
+  border: 1px solid #ece8db;
+  border-radius: 10px;
+  background: #fffdf7;
+  color: #766b4e;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.sc16-provider-limit svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+@media (max-width: 760px) {
+  .sc15-month-day {
+    min-height: 190px;
+  }
+
+  .sc15-month-post {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    min-height: 50px;
+  }
+
+  .sc15-month-thumb {
+    width: 42px;
+    height: 42px;
+  }
+}
