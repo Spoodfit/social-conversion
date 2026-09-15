@@ -44,6 +44,16 @@ source = source.replace(
   "disabled={connection.platform === 'linkedin' ? !linkedinReady : connection.platform === 'facebook' ? !metaReady : !ready[connection.platform]}",
 );
 
+source = source.replace(
+  "const publishableConnections = useMemo(() => connections.filter((connection): connection is LiveConnection & { platform: SocialPlatform } => connection.platform !== 'facebook'), [connections]);",
+  "const publishableConnections = useMemo(() => connections.filter((connection): connection is LiveConnection & { platform: SocialPlatform } => connection.platform !== 'facebook' && connection.platform !== 'linkedin'), [connections]);",
+);
+
+source = source.replace(
+  "setSelectedConnectionIds(activeAccountId !== 'all' && activeConnection?.platform !== 'facebook'\n      ? [activeAccountId]",
+  "setSelectedConnectionIds(activeAccountId !== 'all' && activeConnection?.platform !== 'facebook' && activeConnection?.platform !== 'linkedin'\n      ? [activeAccountId]",
+);
+
 const providerListAnchor = '          <div className="sc10-provider-list sc16-provider-list">';
 if (!source.includes('providerHint(\'linkedin\'')) {
   if (!source.includes(providerListAnchor)) throw new Error('LinkedIn UI type fix failed: account provider list anchor not found.');
@@ -59,14 +69,10 @@ if (!source.includes('providerHint(\'linkedin\'')) {
 }
 
 source = source.replace(
-  'Plusieurs comptes peuvent être connectés sur chaque réseau',
-  'Plusieurs comptes peuvent être connectés sur chaque réseau',
-);
-source = source.replace(
   'plusieurs comptes Instagram, Facebook, YouTube ou TikTok dans le même espace.',
   'plusieurs comptes Instagram, Facebook, LinkedIn, YouTube ou TikTok dans le même espace.',
 );
 
 source += '\n/* SC_LINKEDIN_UI_TYPES_V2 */\n';
 fs.writeFileSync(path, source);
-console.log('LinkedIn account routing and UI types finalized.');
+console.log('LinkedIn account routing, composer isolation and UI types finalized.');
