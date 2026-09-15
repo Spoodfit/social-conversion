@@ -18,13 +18,11 @@ if (!app.includes('SC_CONNECTED_DESTINATIONS_ONLY_V1')) {
     'connect-account navigation event',
   );
 
-  // Planned/unconnected destinations are legacy-only. They must not count as a valid new destination.
   app = app.replaceAll(
     `const selectedCount = selectedIds.length + plannedPlatforms.length;`,
     `const selectedCount = selectedIds.length;`,
   );
 
-  // Only connected accounts appear in guided step 2.
   app = app.replaceAll(
     `const platformConnections = connections.filter((connection) => connection.platform === platform);`,
     `const platformConnections = connections.filter((connection) => connection.platform === platform && connection.status === 'connected');`,
@@ -59,8 +57,8 @@ let editor = fs.readFileSync(editorPath, 'utf8');
 if (!editor.includes('SC_CONNECTED_DESTINATION_EDITOR_V1')) {
   editor = replaceOnce(
     editor,
-    `  return (\n    <section className="sc4-destinations">`,
-    `  const connectedConnections = connections.filter((connection) => connection.status === 'connected');\n\n  return (\n    <section className="sc4-destinations">`,
+    `}) {\n  const selected: DestinationDraft[] = [];`,
+    `}) {\n  const connectedConnections = connections.filter((connection) => connection.status === 'connected');\n  const selected: DestinationDraft[] = [];`,
     'connected connection list',
   );
   editor = editor.replace(
