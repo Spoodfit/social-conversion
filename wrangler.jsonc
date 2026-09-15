@@ -26,6 +26,7 @@
     "META_APP_ID": "2446518689171895",
     "META_LOGIN_CONFIG_ID": "2561481621015136",
     "META_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/meta/callback",
+    "INSTAGRAM_APP_ID": "2631396647296711",
     "INSTAGRAM_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/instagram/callback",
     "YOUTUBE_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/youtube/callback",
     "TIKTOK_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/tiktok/callback",
