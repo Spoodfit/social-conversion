@@ -11,6 +11,16 @@ const eventName = 'social-conversion:connect-account';
 const appPath = 'src/LiveAppV3.tsx';
 let app = fs.readFileSync(appPath, 'utf8');
 if (!app.includes('SC_CONNECTED_DESTINATIONS_ONLY_V1')) {
+  const conversationConnectionType = `  accountName?: string;\n  connectionId?: string;\n  status: string;`;
+  if (!app.includes(conversationConnectionType)) {
+    app = replaceOnce(
+      app,
+      `  accountName?: string;\n  status: string;`,
+      conversationConnectionType,
+      'stable Inbox connection id type',
+    );
+  }
+
   app = replaceOnce(
     app,
     `  function navigate(next: Page) {\n    setPage(next);\n    window.scrollTo({ top: 0, behavior: 'smooth' });\n  }`,
