@@ -1,7 +1,10 @@
 import './fix-meta-isolated-storage.mjs';
 import './fix-social-oauth-persistence.mjs';
 import './apply-meta-selection-v2.mjs';
+import './fix-meta-selection-route-guard.mjs';
 import './fix-connection-v2-typecheck.mjs';
+import './fix-meta-facebook-page-discovery.mjs';
+import './fix-meta-facebook-assigned-pages.mjs';
 import fs from 'node:fs';
 
 const path = 'src/LiveAppV3.tsx';
