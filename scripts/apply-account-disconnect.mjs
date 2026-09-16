@@ -10,100 +10,93 @@ function replaceOrThrow(source, before, after, label) {
 const workerPath = 'src/worker/cockpit-production.ts';
 let worker = fs.readFileSync(workerPath, 'utf8');
 if (!worker.includes('SC_ACCOUNT_DISCONNECT_V1')) {
+  const backendHandler = [
+    'async function handleSocialConnectionDisconnect(',
+    '  request: Request,',
+    '  env: Env,',
+    '  connectionId: string,',
+    '): Promise<Response> {',
+    '  const auth = await authenticateWorkspace(request, env);',
+    '  if (!auth.ok) return auth.response;',
+    '  if (!isLive(env)) {',
+    "    return Response.json({ error: 'La gestion des connexions est indisponible.', code: 'LIVE_NOT_READY' }, { status: 503 });",
+    '  }',
+    "  if (auth.principal.role !== 'admin' && auth.principal.role !== 'manager') {",
+    "    return Response.json({ error: 'Seuls les administrateurs et managers peuvent déconnecter un compte.', code: 'ROLE_FORBIDDEN' }, { status: 403 });",
+    '  }',
+    '',
+    '  const body = await request.json().catch(() => ({})) as { platform?: unknown };',
+    "  const platform = typeof body.platform === 'string' ? body.platform : '';",
+    "  if (!['facebook', 'instagram', 'youtube', 'tiktok', 'linkedin'].includes(platform)) {",
+    "    return Response.json({ error: 'Plateforme invalide.', code: 'INVALID_REQUEST' }, { status: 400 });",
+    '  }',
+    '  if (!/^[A-Za-z0-9][A-Za-z0-9:_-]{0,199}$/.test(connectionId)) {',
+    "    return Response.json({ error: 'Connexion introuvable.', code: 'CONNECTION_NOT_FOUND' }, { status: 404 });",
+    '  }',
+    '',
+    '  const now = new Date().toISOString();',
+    '  let found: { id: string; display_name: string } | null = null;',
+    '',
+    "  if (platform === 'facebook') {",
+    '    found = await env.DB.prepare(',
+    "      'SELECT id, display_name FROM facebook_connections WHERE id = ? AND workspace_id = ? LIMIT 1',",
+    '    ).bind(connectionId, auth.principal.workspaceId).first<{ id: string; display_name: string }>();',
+    '    if (found) {',
+    '      await env.DB.prepare(',
+    "        \"UPDATE facebook_connections SET status = 'revoked', capabilities_json = '{}', scopes_json = '[]', access_token_ciphertext = '', access_token_iv = '', access_key_version = '', updated_at = ? WHERE id = ? AND workspace_id = ?\",",
+    '      ).bind(now, connectionId, auth.principal.workspaceId).run();',
+    '    }',
+    "  } else if (platform === 'linkedin') {",
+    '    found = await env.DB.prepare(',
+    "      'SELECT id, display_name FROM linkedin_connections WHERE id = ? AND workspace_id = ? LIMIT 1',",
+    '    ).bind(connectionId, auth.principal.workspaceId).first<{ id: string; display_name: string }>();',
+    '    if (found) {',
+    '      await env.DB.prepare(',
+    "        \"UPDATE linkedin_connections SET status = 'revoked', capabilities_json = '{}', scopes_json = '[]', access_token_ciphertext = '', access_token_iv = '', access_key_version = '', refresh_token_ciphertext = NULL, refresh_token_iv = NULL, refresh_key_version = NULL, access_expires_at = NULL, refresh_expires_at = NULL, updated_at = ? WHERE id = ? AND workspace_id = ?\",",
+    '      ).bind(now, connectionId, auth.principal.workspaceId).run();',
+    '    }',
+    '  } else {',
+    '    found = await env.DB.prepare(',
+    "      'SELECT id, display_name FROM social_connections WHERE id = ? AND workspace_id = ? AND platform = ? LIMIT 1',",
+    '    ).bind(connectionId, auth.principal.workspaceId, platform).first<{ id: string; display_name: string }>();',
+    '    if (found) {',
+    '      await env.DB.batch([',
+    '        env.DB.prepare(',
+    "          'DELETE FROM oauth_credentials WHERE connection_id = ? AND workspace_id = ?',",
+    '        ).bind(connectionId, auth.principal.workspaceId),',
+    '        env.DB.prepare(',
+    "          \"UPDATE social_connections SET status = 'revoked', capabilities_json = '{}', token_reference = NULL, updated_at = ? WHERE id = ? AND workspace_id = ? AND platform = ?\",",
+    '        ).bind(now, connectionId, auth.principal.workspaceId, platform),',
+    '      ]);',
+    '    }',
+    '  }',
+    '',
+    '  if (!found) {',
+    "    return Response.json({ error: 'Connexion introuvable dans cet espace.', code: 'CONNECTION_NOT_FOUND' }, { status: 404 });",
+    '  }',
+    '',
+    "  await writeAuditLog(env.DB, auth.principal, 'social_connection.disconnected', 'social_connection', connectionId, {",
+    '    platform,',
+    '    displayName: found.display_name,',
+    '  });',
+    '',
+    '  return Response.json({',
+    '    connection: {',
+    '      id: connectionId,',
+    '      platform,',
+    '      displayName: found.display_name,',
+    "      status: 'revoked',",
+    '    },',
+    '  });',
+    '}',
+    '',
+    'const cockpitProductionWorker = {',
+  ].join('\n');
+
   worker = replaceOrThrow(
     worker,
     'const cockpitProductionWorker = {',
-`async function handleSocialConnectionDisconnect(
-  request: Request,
-  env: Env,
-  connectionId: string,
-): Promise<Response> {
-  const auth = await authenticateWorkspace(request, env);
-  if (!auth.ok) return auth.response;
-  if (!isLive(env)) {
-    return Response.json({ error: 'La gestion des connexions est indisponible.', code: 'LIVE_NOT_READY' }, { status: 503 });
-  }
-  if (auth.principal.role !== 'admin' && auth.principal.role !== 'manager') {
-    return Response.json({ error: 'Seuls les administrateurs et managers peuvent déconnecter un compte.', code: 'ROLE_FORBIDDEN' }, { status: 403 });
-  }
-
-  const body = await request.json().catch(() => ({})) as { platform?: unknown };
-  const platform = typeof body.platform === 'string' ? body.platform : '';
-  if (!['facebook', 'instagram', 'youtube', 'tiktok', 'linkedin'].includes(platform)) {
-    return Response.json({ error: 'Plateforme invalide.', code: 'INVALID_REQUEST' }, { status: 400 });
-  }
-  if (!/^[A-Za-z0-9][A-Za-z0-9:_-]{0,199}$/.test(connectionId)) {
-    return Response.json({ error: 'Connexion introuvable.', code: 'CONNECTION_NOT_FOUND' }, { status: 404 });
-  }
-
-  const now = new Date().toISOString();
-  let found: { id: string; display_name: string } | null = null;
-
-  if (platform === 'facebook') {
-    found = await env.DB.prepare(
-      `SELECT id, display_name FROM facebook_connections WHERE id = ? AND workspace_id = ? LIMIT 1`,
-    ).bind(connectionId, auth.principal.workspaceId).first<{ id: string; display_name: string }>();
-    if (found) {
-      await env.DB.prepare(
-        `UPDATE facebook_connections
-         SET status = 'revoked', capabilities_json = '{}', scopes_json = '[]',
-             access_token_ciphertext = '', access_token_iv = '', access_key_version = '', updated_at = ?
-         WHERE id = ? AND workspace_id = ?`,
-      ).bind(now, connectionId, auth.principal.workspaceId).run();
-    }
-  } else if (platform === 'linkedin') {
-    found = await env.DB.prepare(
-      `SELECT id, display_name FROM linkedin_connections WHERE id = ? AND workspace_id = ? LIMIT 1`,
-    ).bind(connectionId, auth.principal.workspaceId).first<{ id: string; display_name: string }>();
-    if (found) {
-      await env.DB.prepare(
-        `UPDATE linkedin_connections
-         SET status = 'revoked', capabilities_json = '{}', scopes_json = '[]',
-             access_token_ciphertext = '', access_token_iv = '', access_key_version = '',
-             refresh_token_ciphertext = NULL, refresh_token_iv = NULL, refresh_key_version = NULL,
-             access_expires_at = NULL, refresh_expires_at = NULL, updated_at = ?
-         WHERE id = ? AND workspace_id = ?`,
-      ).bind(now, connectionId, auth.principal.workspaceId).run();
-    }
-  } else {
-    found = await env.DB.prepare(
-      `SELECT id, display_name FROM social_connections
-       WHERE id = ? AND workspace_id = ? AND platform = ? LIMIT 1`,
-    ).bind(connectionId, auth.principal.workspaceId, platform).first<{ id: string; display_name: string }>();
-    if (found) {
-      await env.DB.batch([
-        env.DB.prepare(
-          `DELETE FROM oauth_credentials WHERE connection_id = ? AND workspace_id = ?`,
-        ).bind(connectionId, auth.principal.workspaceId),
-        env.DB.prepare(
-          `UPDATE social_connections
-           SET status = 'revoked', capabilities_json = '{}', token_reference = NULL, updated_at = ?
-           WHERE id = ? AND workspace_id = ? AND platform = ?`,
-        ).bind(now, connectionId, auth.principal.workspaceId, platform),
-      ]);
-    }
-  }
-
-  if (!found) {
-    return Response.json({ error: 'Connexion introuvable dans cet espace.', code: 'CONNECTION_NOT_FOUND' }, { status: 404 });
-  }
-
-  await writeAuditLog(env.DB, auth.principal, 'social_connection.disconnected', 'social_connection', connectionId, {
-    platform,
-    displayName: found.display_name,
-  });
-
-  return Response.json({
-    connection: {
-      id: connectionId,
-      platform,
-      displayName: found.display_name,
-      status: 'revoked',
-    },
-  });
-}
-
-const cockpitProductionWorker = {`,
+    backendHandler,
     'backend disconnect handler',
   );
 
