@@ -134,3 +134,4 @@ console.log('Generated Threads account routing finalized for the current product
 
 await import('./apply-threads-compliance-callbacks.mjs');
 await import('./apply-threads-runtime-sync.mjs');
+await import('./apply-inbox-reply-ux-ai-writer.mjs');
