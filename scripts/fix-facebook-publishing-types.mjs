@@ -88,3 +88,4 @@ if (!preview.includes('SC_FACEBOOK_COMPOSER_PREVIEW_V1')) {
 
 console.log('Facebook publishing types and composer preview completed.');
 await import('./apply-facebook-preview-v2.mjs');
+await import('./fix-facebook-permission-gates.mjs');
