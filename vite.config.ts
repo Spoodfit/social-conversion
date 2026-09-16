@@ -1,7 +1,9 @@
 import { cloudflare } from '@cloudflare/vite-plugin';
-import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+// Vite transforms TSX/JSX through its built-in esbuild pipeline.
+// Keep the production build independent from @vitejs/plugin-react so a
+// missing optional dev package cannot block Cloudflare deployment.
 export default defineConfig({
-  plugins: [react(), cloudflare()],
+  plugins: [cloudflare()],
 });
