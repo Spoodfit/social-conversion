@@ -63,7 +63,7 @@ if (!runtime.includes('SC_THREADS_RICH_CONTEXT_RUNTIME_V1')) {
   runtime = replaceOnce(
     runtime,
     `      const replies = await fetchThreadConversation(rootId, token, fetchImpl);\n      let count = 0;`,
-    `      const replies = await fetchThreadConversation(rootId, token, fetchImpl);\n      const repliesById = new Map(replies.map((candidate) => [text(candidate.id, 250), candidate]).filter(([id]) => Boolean(id)));\n      let count = 0;`,
+    `      const replies = await fetchThreadConversation(rootId, token, fetchImpl);\n      const replyPairs: Array<[string, ThreadsReply]> = replies\n        .map((candidate): [string, ThreadsReply] => [text(candidate.id, 250), candidate])\n        .filter(([id]) => Boolean(id));\n      const repliesById = new Map<string, ThreadsReply>(replyPairs);\n      let count = 0;`,
     'reply parent lookup',
   );
 
