@@ -145,8 +145,8 @@ if (!app.includes('SC_INBOX_POLISH_UI_V2')) {
 
   app = replaceOnce(
     app,
-    `    <div className="sc3-shell">`,
-    `    <div className={\`sc3-shell \${sidebarCollapsed ? 'sidebar-collapsed' : ''}\`}>`,
+    `    <div className={\`sc3-shell\${page === 'create' ? ' sc6-drawer-open' : ''}\`}>`,
+    `    <div className={\`sc3-shell\${page === 'create' ? ' sc6-drawer-open' : ''}\${sidebarCollapsed ? ' sidebar-collapsed' : ''}\`}>`,
     'sidebar shell class',
   );
 
