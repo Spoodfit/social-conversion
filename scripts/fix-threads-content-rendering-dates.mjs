@@ -29,7 +29,7 @@ if (!app.includes('SC_THREADS_CONTENT_RENDERING_DATES_V1')) {
   // Compact conversation list: explicit text fallback + content type next to the source title.
   app = app.replaceAll(
     `{conversation.latestMessage.context.previewUrl ? <img src={conversation.latestMessage.context.previewUrl} alt="" loading="lazy" /> : <span className="sc20-row-fallback"><PlatformMark platform={conversation.platform} size={11} /></span>}<span><small>Sur</small><b>{contentContextTitle(conversation.latestMessage.context)}</b></span>`,
-    `{conversation.latestMessage.context.previewUrl ? <img src={conversation.latestMessage.context.previewUrl} alt="" loading="lazy" /> : conversation.platform === 'threads' ? <span className="sc26-text-fallback sc26-text-fallback-row" aria-label="Post texte"><b>Aa</b></span> : <span className="sc20-row-fallback"><PlatformMark platform={conversation.platform} size={11} /></span>}<span><small>Sur</small><b>{contentContextTitle(conversation.latestMessage.context)}</b><em className="sc26-source-kind">{conversation.platform === 'threads' ? inboxContentTypeLabel(conversation.latestMessage.context) : inboxContentTypeLabel(conversation.latestMessage.context)}</em></span>`,
+    `{conversation.latestMessage.context.previewUrl ? <img src={conversation.latestMessage.context.previewUrl} alt="" loading="lazy" /> : conversation.platform === 'threads' ? <span className="sc26-text-fallback sc26-text-fallback-row" aria-label="Post texte"><b>Aa</b></span> : <span className="sc20-row-fallback"><PlatformMark platform={conversation.platform} size={11} /></span>}<span><small>Sur</small><b>{contentContextTitle(conversation.latestMessage.context)}</b><em className="sc26-source-kind">{inboxContentTypeLabel(conversation.latestMessage.context)}</em></span>`,
   );
 
   // Detailed source card: media gets its real preview; text-only Threads get a deliberate typographic card.
@@ -39,8 +39,8 @@ if (!app.includes('SC_THREADS_CONTENT_RENDERING_DATES_V1')) {
   );
 
   app = app.replaceAll(
-    `<em>{message.context.mediaType ? \`${message.context.mediaType.replaceAll('_', ' ')} · \` : ''}Publié{message.context.publishedAt ? \` · ${formatShortDate(message.context.publishedAt)}\` : ''}</em>`,
-    `<em>{inboxContentTypeLabel(message.context)} · Publié{message.context.publishedAt ? \` · ${formatShortDate(message.context.publishedAt)}\` : ''}</em>`,
+    "<em>{message.context.mediaType ? `${message.context.mediaType.replaceAll('_', ' ')} · ` : ''}Publié{message.context.publishedAt ? ` · ${formatShortDate(message.context.publishedAt)}` : ''}</em>",
+    "<em>{inboxContentTypeLabel(message.context)} · Publié{message.context.publishedAt ? ` · ${formatShortDate(message.context.publishedAt)}` : ''}</em>",
   );
 
   app += '\n/* SC_THREADS_CONTENT_RENDERING_DATES_V1 */\n';
