@@ -56,6 +56,7 @@ if (source !== original) fs.writeFileSync(path, source);
 // and account-switcher patches from re-excluding LinkedIn from Planner destinations.
 await import('./run-linkedin-publishing.mjs');
 await import('./apply-account-disconnect.mjs');
+await import('./fix-linkedin-community-scopes.mjs');
 await import('./apply-linkedin-community-management.mjs');
 
 console.log('LinkedIn add-account routing, publishing and Community Management are finalized.');
