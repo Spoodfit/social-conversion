@@ -100,3 +100,5 @@ if (!source.includes("connection.platform !== 'threads'")) {
 source += source.includes('SC_THREADS_UI_GENERATED_V1') ? '' : '\n/* SC_THREADS_UI_GENERATED_V1 */\n';
 fs.writeFileSync(path, source);
 console.log('Generated Threads account routing finalized idempotently.');
+
+await import('./apply-threads-compliance-callbacks.mjs');
