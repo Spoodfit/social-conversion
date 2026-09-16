@@ -103,13 +103,13 @@ if (!sync.includes('SC_FACEBOOK_INBOX_DRAWER_PREVIEW_V1')) {
     ).bind(eventId, conversationId, input.externalMessageId, input.direction, input.type, input.body, input.direction === 'outbound' ? 'sent' : 'received', input.occurredAt, now),`,
 `    db.prepare(
       ` + '`' + `INSERT INTO messages
-         (id, conversation_id, external_id, direction, message_type, body, status, sent_at, created_at, content_context_json)
+         (id, conversation_id, external_id, direction, message_type, body, status, sent_at, created_at, context_json)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
-         content_context_json = excluded.content_context_json
-       WHERE excluded.content_context_json IS NOT NULL
-         AND excluded.content_context_json <> ''
-         AND COALESCE(messages.content_context_json, '') <> excluded.content_context_json` + '`' + `,
+         context_json = excluded.context_json
+       WHERE excluded.context_json IS NOT NULL
+         AND excluded.context_json <> ''
+         AND COALESCE(messages.context_json, '') <> excluded.context_json` + '`' + `,
     ).bind(eventId, conversationId, input.externalMessageId, input.direction, input.type, input.body, input.direction === 'outbound' ? 'sent' : 'received', input.occurredAt, now, input.contentContextJson ?? null),`,
     'Facebook message context persistence',
   );
