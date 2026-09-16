@@ -5,6 +5,7 @@ let app = fs.readFileSync(appPath, 'utf8');
 
 if (app.includes('SC_NATIVE_PLATFORM_COMPOSER_V2')) {
   console.log('Native platform composer already applied.');
+  await import('./apply-startup-performance.mjs');
   process.exit(0);
 }
 
@@ -22,3 +23,4 @@ app = app.replace(legacyAnchor, nativeComposer + legacyAnchor);
 app += `\n/* SC_NATIVE_PLATFORM_COMPOSER_V2 */\n`;
 fs.writeFileSync(appPath, app);
 console.log('Native per-network composer wired into guided step 3.');
+await import('./apply-startup-performance.mjs');
