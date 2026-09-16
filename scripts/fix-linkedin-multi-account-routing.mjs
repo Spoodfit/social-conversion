@@ -59,5 +59,6 @@ await import('./apply-account-disconnect.mjs');
 await import('./fix-linkedin-community-scopes.mjs');
 await import('./apply-linkedin-community-management.mjs');
 await import('./upgrade-linkedin-organization-posts-api.mjs');
+await import('./fix-linkedin-posts-api-types.mjs');
 
 console.log('LinkedIn add-account routing, publishing and Community Management are finalized.');
