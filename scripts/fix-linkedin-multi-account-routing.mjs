@@ -58,6 +58,7 @@ await import('./run-linkedin-publishing.mjs');
 await import('./apply-account-disconnect.mjs');
 await import('./fix-linkedin-community-scopes.mjs');
 await import('./apply-linkedin-community-management.mjs');
+await import('./split-linkedin-community-credentials.mjs');
 await import('./upgrade-linkedin-organization-posts-api.mjs');
 await import('./fix-linkedin-posts-api-types.mjs');
 
