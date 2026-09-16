@@ -11,7 +11,10 @@ export default defineConfig(async () => {
   return {
     plugins: [
       cloudflareTest({
-        wrangler: { configPath: './wrangler.jsonc' },
+        // Production uses a Workers AI binding. Workers AI has no local simulator,
+        // so tests intentionally load the local-only Wrangler config to avoid
+        // opening a remote Cloudflare proxy session in CI.
+        wrangler: { configPath: './wrangler.test.jsonc' },
         miniflare: {
           compatibilityDate: '2026-08-08',
           bindings: {
