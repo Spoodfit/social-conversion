@@ -6,7 +6,7 @@ let app = fs.readFileSync(appPath, 'utf8');
 if (!app.includes('SC_STARTUP_PERFORMANCE_V1')) {
   app = app.replace(
     `  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>();\n  const [workspaceId, setWorkspaceId] = useState<string>();\n  const [session, setSession] = useState<SessionPayload>();\n  const [bootstrap, setBootstrap] = useState<LiveBootstrap>();\n  const [inbox, setInbox] = useState<InboxPayload>();`,
-    `  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);\n  const [workspaceId, setWorkspaceId] = useState<string>(() => window.localStorage.getItem('social-conversion.workspace') || undefined);\n  const [session, setSession] = useState<SessionPayload>();\n  const [bootstrap, setBootstrap] = useState<LiveBootstrap>();\n  const [inbox, setInbox] = useState<InboxPayload>(() => ({ conversations: [], page: { limit: 50, hasMore: false } }));`,
+    `  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);\n  const [workspaceId, setWorkspaceId] = useState<string | undefined>(() => window.localStorage.getItem('social-conversion.workspace') || undefined);\n  const [session, setSession] = useState<SessionPayload>();\n  const [bootstrap, setBootstrap] = useState<LiveBootstrap>();\n  const [inbox, setInbox] = useState<InboxPayload>(() => ({ conversations: [], page: { limit: 50, hasMore: false } }));`,
   );
 
   const workspaceEffectStart = `  useEffect(() => {\n    let active = true;\n    apiRequest<{ workspaces: WorkspaceSummary[] }>('/api/workspaces')`;
