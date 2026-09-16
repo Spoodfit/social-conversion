@@ -37,4 +37,5 @@ if (!liveData.includes('SC_INBOX_TODO_SEMANTICS_V1')) {
   fs.writeFileSync(liveDataPath, liveData);
 }
 
+await import('./apply-reply-experience.mjs');
 console.log('Inbox À traiter now remains independent from read/unread state.');
