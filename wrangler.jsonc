@@ -32,6 +32,8 @@
     "YOUTUBE_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/youtube/callback",
     "TIKTOK_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/tiktok/callback",
     "LINKEDIN_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/linkedin/callback",
+    "THREADS_APP_ID": "4395903137390156",
+    "THREADS_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/threads/callback",
     "TEAM_DOMAIN": "https://neptune-business.cloudflareaccess.com",
     "POLICY_AUD": "34242650323f08b7d0ee045701f9b38b33b7e15009689e80253ffe6329111374"
   },
