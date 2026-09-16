@@ -5,6 +5,7 @@ let source = fs.readFileSync(path, 'utf8');
 
 if (source.includes('THREADS_COMPLIANCE_CALLBACKS_V1')) {
   console.log('Threads compliance callbacks already applied.');
+  await import('./apply-reply-experience.mjs');
   process.exit(0);
 }
 
@@ -122,3 +123,4 @@ source = source.replace(
 source += '\n// THREADS_COMPLIANCE_CALLBACKS_V1\n';
 fs.writeFileSync(path, source);
 console.log('Threads deauthorization and data deletion callbacks applied.');
+await import('./apply-reply-experience.mjs');
