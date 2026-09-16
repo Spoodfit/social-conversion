@@ -20,8 +20,6 @@ source = replaceOnce(
   'AI reply loading state',
 );
 
-// Preserve the dedicated Threads and LinkedIn reply handlers. Only replace the generic
-// provider branch so YouTube can return an actual provider-confirmed message.
 const genericBefore = `    if (!runtime.outboundReady) {\n      setToast('La lecture est active, mais l’envoi réel est encore verrouillé.');\n      return;\n    }\n    setReplyBusy(true);\n    try {\n      await apiRequest('/api/messages', {\n        method: 'POST',\n        body: JSON.stringify({\n          conversationId: selectedConversation.id,\n          message: reply.trim(),\n          idempotencyKey: crypto.randomUUID(),\n        }),\n      }, workspaceId);\n      setReply('');\n      setToast('Réponse envoyée.');\n      setRefreshIndex((value) => value + 1);\n    } catch (error) {\n      setToast(readableError(error));\n    } finally {\n      setReplyBusy(false);\n    }`;
 const genericAfter = `    if (!runtime.outboundReady && selectedConversation.platform !== 'youtube') {\n      setToast('L’envoi réel n’est pas disponible pour ce compte.');\n      return;\n    }\n    const submitted = reply.trim();\n    setReplyBusy(true);\n    try {\n      const result = await apiRequest<{ status?: string; message?: ConversationMessage; id?: string }>('/api/messages', {\n        method: 'POST',\n        body: JSON.stringify({\n          conversationId: selectedConversation.id,\n          message: submitted,\n          idempotencyKey: crypto.randomUUID(),\n        }),\n      }, workspaceId);\n      if (result.status === 'sent' && result.message) {\n        setReply('');\n        setMessages((current) => current && current.conversationId === selectedConversation.id ? {\n          ...current,\n          messages: [result.message!, ...current.messages.filter((message) => message.id !== result.message!.id)],\n        } : current);\n        setInbox((current) => current ? {\n          ...current,\n          conversations: current.conversations.map((conversation) => conversation.id === selectedConversation.id ? {\n            ...conversation,\n            unread: false,\n            needsReply: false,\n            lastMessageAt: result.message!.sentAt,\n            updatedAt: result.message!.sentAt,\n            latestMessage: { body: result.message!.body, direction: 'outbound', type: result.message!.type, sentAt: result.message!.sentAt },\n          } : conversation),\n        } : current);\n        setToast('Réponse envoyée et confirmée par le réseau.');\n      } else {\n        setReply('');\n        setToast('Réponse prise en charge. Confirmation du réseau en cours.');\n        setRefreshIndex((value) => value + 1);\n      }\n    } catch (error) {\n      setToast(readableError(error));\n    } finally {\n      setReplyBusy(false);\n    }`;
 source = replaceOnce(source, genericBefore, genericAfter, 'provider-confirmed generic reply flow');
@@ -41,6 +39,12 @@ source = replaceOnce(
 
 source = replaceOnce(
   source,
+  `              reply={reply}\n              replyTargetMessageId={replyTargetMessageId}`,
+  `              reply={reply}\n              replyBusy={replyBusy}\n              replyTargetMessageId={replyTargetMessageId}`,
+  'pass reply busy state',
+);
+source = replaceOnce(
+  source,
   `              onSuggest={() => void suggestReply()}`,
   `              suggestBusy={aiReplyBusy}\n              onSuggest={() => void suggestReply()}`,
   'pass AI busy state to Inbox',
@@ -48,14 +52,20 @@ source = replaceOnce(
 source = replaceOnce(
   source,
   `function InboxPage({ conversations, selected, messages, loading, query, filter, statusFilter, refreshBusy, sync, reply, replyTargetMessageId, outboundReady, aiReady, accountLabel, onQuery, onFilter, onStatusFilter, onRefresh, onSelect, onReply, onReplyTarget, onSend, onSuggest, onOpenPublication }: {`,
-  `function InboxPage({ conversations, selected, messages, loading, query, filter, statusFilter, refreshBusy, sync, reply, replyTargetMessageId, outboundReady, aiReady, suggestBusy, accountLabel, onQuery, onFilter, onStatusFilter, onRefresh, onSelect, onReply, onReplyTarget, onSend, onSuggest, onOpenPublication }: {`,
+  `function InboxPage({ conversations, selected, messages, loading, query, filter, statusFilter, refreshBusy, sync, reply, replyBusy, replyTargetMessageId, outboundReady, aiReady, suggestBusy, accountLabel, onQuery, onFilter, onStatusFilter, onRefresh, onSelect, onReply, onReplyTarget, onSend, onSuggest, onOpenPublication }: {`,
   'InboxPage busy prop signature',
+);
+source = replaceOnce(
+  source,
+  `  reply: string;\n  replyTargetMessageId?: string;`,
+  `  reply: string;\n  replyBusy: boolean;\n  replyTargetMessageId?: string;`,
+  'InboxPage reply busy prop type',
 );
 source = replaceOnce(
   source,
   `  aiReady: boolean;\n  accountLabel: string;`,
   `  aiReady: boolean;\n  suggestBusy: boolean;\n  accountLabel: string;`,
-  'InboxPage busy prop type',
+  'InboxPage AI busy prop type',
 );
 source = replaceOnce(
   source,
@@ -82,9 +92,10 @@ source = replaceOnce(
   'send button loading state',
 );
 
+if (!source.includes('replyBusy={replyBusy}')) throw new Error('Inbox response UX patch failed: replyBusy not wired.');
 if (!source.includes('suggestBusy={aiReplyBusy}')) throw new Error('Inbox response UX patch failed: suggestBusy not wired.');
 if (!source.includes('Rédaction en cours…')) throw new Error('Inbox response UX patch failed: AI loading text missing.');
-if (!source.includes(`youtubeCommentReplyReady`)) throw new Error('Inbox response UX patch failed: YouTube reply readiness missing.');
+if (!source.includes('youtubeCommentReplyReady')) throw new Error('Inbox response UX patch failed: YouTube reply readiness missing.');
 
 source += '\n/* SC_INBOX_RESPONSE_UX_V1 */\n';
 fs.writeFileSync(path, source);
