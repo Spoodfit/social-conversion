@@ -19,6 +19,7 @@ import './youtube-scheduling-ux.css';
 import './planner-publication-status.css';
 import './planner-readiness-status.css';
 import './native-social-preview.css';
+import './native-platform-composer.css';
 
 const DemoApp = lazy(() => import('./App'));
 
