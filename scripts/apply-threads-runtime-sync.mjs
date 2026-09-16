@@ -117,4 +117,6 @@ if (!app.includes('SC_THREADS_RUNTIME_UI_V1')) {
   fs.writeFileSync(appPath, app);
 }
 
+await import('./fix-threads-inbox-rich-context.mjs');
+
 console.log('Threads posts, replies and mentions are wired into Planner and Inbox.');
