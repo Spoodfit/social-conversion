@@ -170,7 +170,7 @@ describe('live inbox pagination', () => {
   it('rejects malformed cursors and invalid filters', async () => {
     await expect(listInboxConversations(env.DB, workspaceId, { cursor: '../../etc/passwd' }))
       .rejects.toMatchObject({ code: 'INVALID_CURSOR' });
-    await expect(listInboxConversations(env.DB, workspaceId, { platform: 'linkedin' }))
+    await expect(listInboxConversations(env.DB, workspaceId, { platform: 'snapchat' }))
       .rejects.toMatchObject({ code: 'INVALID_QUERY' });
     await expect(listInboxConversations(env.DB, workspaceId, { limit: '999' }))
       .rejects.toMatchObject({ code: 'INVALID_QUERY' });
