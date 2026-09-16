@@ -55,5 +55,6 @@ if (source !== original) fs.writeFileSync(path, source);
 // Keep LinkedIn publishing as the final generated patch. This prevents older Facebook
 // and account-switcher patches from re-excluding LinkedIn from Planner destinations.
 await import('./run-linkedin-publishing.mjs');
+await import('./apply-account-disconnect.mjs');
 
 console.log('LinkedIn add-account routing and publishing are finalized.');
