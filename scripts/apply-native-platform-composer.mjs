@@ -8,6 +8,7 @@ if (app.includes('SC_NATIVE_PLATFORM_COMPOSER_V2')) {
   await import('./apply-startup-performance.mjs');
   await import('./apply-planner-list-controls.mjs');
   await import('./apply-free-inbox-ai-copilot.mjs');
+  await import('./fix-free-ai-message-column.mjs');
   process.exit(0);
 }
 
@@ -28,3 +29,4 @@ console.log('Native per-network composer wired into guided step 3.');
 await import('./apply-startup-performance.mjs');
 await import('./apply-planner-list-controls.mjs');
 await import('./apply-free-inbox-ai-copilot.mjs');
+await import('./fix-free-ai-message-column.mjs');
