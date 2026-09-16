@@ -142,4 +142,6 @@ if (!css.includes('SC_THREADS_RICH_CONTEXT_CSS_V1')) {
   fs.writeFileSync(cssPath, css);
 }
 
+await import('./fix-threads-content-rendering-dates.mjs');
+
 console.log('Threads Inbox now exposes real avatars and explicit reply/mention source context.');
