@@ -49,5 +49,6 @@ if (!css.includes('SC_THREADS_CONTENT_RENDERING_DATES_CSS_V1')) {
 }
 
 await import('./fix-threads-threaded-replies.mjs');
+await import('./fix-inbox-unread-manual-open.mjs');
 
 console.log('Threads source cards now distinguish text/media content and Inbox dates include the year.');
