@@ -3,9 +3,23 @@ import fs from 'node:fs';
 const path = 'src/LiveAppV3.tsx';
 let source = fs.readFileSync(path, 'utf8');
 
+// The production UI evolved after the original Threads patch. Finalize the generated
+// component signatures and routing here, after every native UI patch has run.
 source = source.replace(
   'function AccountPanel({ connections, ready, metaReady, linkedinReady, onConnectLinkedIn, onClose, onConnect, onConnectMeta, activeAccountId, onSwitch }: {',
   'function AccountPanel({ connections, ready, metaReady, linkedinReady, onConnectLinkedIn, threadsReady, onConnectThreads, onClose, onConnect, onConnectMeta, activeAccountId, onSwitch }: {',
+);
+source = source.replace(
+  'function SettingsPage({ session, connections, runtime, onConnect, onConnectMeta, onConnectLinkedIn, onConnectLinkedInCommunity, onDisconnect, onRefresh }: {',
+  'function SettingsPage({ session, connections, runtime, onConnect, onConnectMeta, onConnectLinkedIn, onConnectThreads, onConnectLinkedInCommunity, onDisconnect, onRefresh }: {',
+);
+source = source.replace(
+  "  onConnectLinkedIn: (id?: string) => void;\n  onConnectLinkedInCommunity: () => void;",
+  "  onConnectLinkedIn: (id?: string) => void;\n  onConnectThreads: (id?: string) => void;\n  onConnectLinkedInCommunity: () => void;",
+);
+source = source.replace(
+  '              onConnectLinkedIn={(id) => void connectLinkedIn(id)}\n              onConnectLinkedInCommunity={() => void connectLinkedInCommunity()}',
+  '              onConnectLinkedIn={(id) => void connectLinkedIn(id)}\n              onConnectThreads={(id) => void connectThreads(id)}\n              onConnectLinkedInCommunity={() => void connectLinkedInCommunity()}',
 );
 
 // Older Facebook generation can reinsert its narrow alias when patch:ui runs a second time.
@@ -40,7 +54,7 @@ if (source.includes(runtimeReconnectBase) && !source.includes(runtimeReconnectTh
 
 const settingsReconnectBase = "connection.platform === 'linkedin' ? onConnectLinkedIn(connection.id) : connection.platform === 'facebook' ? onConnectMeta('facebook') : onConnect(connection.platform as SocialPlatform, connection.id)";
 const settingsReconnectThreads = "connection.platform === 'threads' ? onConnectThreads(connection.id) : connection.platform === 'linkedin' ? onConnectLinkedIn(connection.id) : connection.platform === 'facebook' ? onConnectMeta('facebook') : onConnect(connection.platform as SocialPlatform, connection.id)";
-if (source.includes(settingsReconnectBase) && !source.includes(settingsReconnectThreads)) {
+if (source.includes(settingsReconnectBase)) {
   source = source.replaceAll(settingsReconnectBase, settingsReconnectThreads);
 }
 
@@ -51,9 +65,16 @@ source = source.replace(
 
 const panelReconnectBase = "connection.platform === 'linkedin' ? !linkedinReady : connection.platform === 'facebook' ? !metaReady : !ready[connection.platform]";
 const panelReconnectThreads = "connection.platform === 'threads' ? !threadsReady : connection.platform === 'linkedin' ? !linkedinReady : connection.platform === 'facebook' ? !metaReady : !ready[connection.platform as SocialPlatform]";
-if (source.includes(panelReconnectBase) && !source.includes(panelReconnectThreads)) {
+if (source.includes(panelReconnectBase)) {
   source = source.replaceAll(panelReconnectBase, panelReconnectThreads);
 }
+
+// Current native composer uses an explicit allow-list of PlanningPlatform values. Threads
+// must remain connection-only until its publishing adapter is implemented.
+source = source.replace(
+  'const publishableKnown = known;',
+  "const publishableKnown = known.filter((connection) => connection.platform !== 'threads');",
+);
 
 // Collapse accidental repeated Threads prefixes left by earlier non-idempotent revisions.
 source = source.replace(
@@ -78,27 +99,37 @@ source = source.replaceAll(
   'Instagram, Facebook, LinkedIn, Threads, YouTube ou TikTok',
 );
 
+const publishableLine = source.split('\n').find((line) => line.includes('const publishableConnections = useMemo')) ?? '';
+const legacyIsolation = source.includes("connection.platform !== 'threads'");
+const nativeIsolation = Boolean(publishableLine)
+  && !publishableLine.includes("connection.platform === 'threads'")
+  && publishableLine.includes("connection.platform === 'instagram'")
+  && publishableLine.includes("connection.platform === 'tiktok'");
+
 if ((source.split(canonicalConnectedPlatform).length - 1) !== 1) {
   throw new Error('Threads generated UI fix failed: connected platform union is not canonical.');
 }
 if (!source.includes('linkedinReady, onConnectLinkedIn, threadsReady, onConnectThreads')) {
   throw new Error('Threads generated UI fix failed: AccountPanel does not destructure Threads props.');
 }
+if (!source.includes('onConnectLinkedIn, onConnectThreads, onConnectLinkedInCommunity')) {
+  throw new Error('Threads generated UI fix failed: SettingsPage does not destructure Threads callback.');
+}
 if (!source.includes("connection.platform === 'threads'")) {
   throw new Error('Threads generated UI fix failed: account routing does not contain Threads.');
 }
-if (!source.includes('onConnectThreads')) {
-  throw new Error('Threads generated UI fix failed: Threads connect callback is missing.');
+if (!source.includes('onConnectThreads={(id) => void connectThreads(id)}')) {
+  throw new Error('Threads generated UI fix failed: Threads callback is not passed to account UI.');
 }
 if (!source.includes('threadsReady')) {
   throw new Error('Threads generated UI fix failed: Threads readiness is missing.');
 }
-if (!source.includes("connection.platform !== 'threads'")) {
+if (!legacyIsolation && !nativeIsolation) {
   throw new Error('Threads generated UI fix failed: Threads is not isolated from the composer yet.');
 }
 
 source += source.includes('SC_THREADS_UI_GENERATED_V1') ? '' : '\n/* SC_THREADS_UI_GENERATED_V1 */\n';
 fs.writeFileSync(path, source);
-console.log('Generated Threads account routing finalized idempotently.');
+console.log('Generated Threads account routing finalized for the current production UI.');
 
 await import('./apply-threads-compliance-callbacks.mjs');
