@@ -1,0 +1,57 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neptune-social-conversion-test",
+  "main": "src/worker/cockpit-production.ts",
+  "compatibility_date": "2026-08-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_ENV": "test",
+    "DEMO_MODE": "false",
+    "LIVE_READY": "true",
+    "META_GRAPH_VERSION": "v24.0",
+    "META_APP_ID": "test-meta-app-id",
+    "META_LOGIN_CONFIG_ID": "test-meta-config-id",
+    "META_REDIRECT_URI": "https://social.test/oauth/meta/callback",
+    "INSTAGRAM_APP_ID": "test-instagram-app-id",
+    "INSTAGRAM_REDIRECT_URI": "https://social.test/oauth/instagram/callback",
+    "YOUTUBE_REDIRECT_URI": "https://social.test/oauth/youtube/callback",
+    "TIKTOK_REDIRECT_URI": "https://social.test/oauth/tiktok/callback",
+    "LINKEDIN_REDIRECT_URI": "https://social.test/oauth/linkedin/callback",
+    "THREADS_APP_ID": "test-threads-app-id",
+    "THREADS_REDIRECT_URI": "https://social.test/oauth/threads/callback",
+    "TEAM_DOMAIN": "https://social-conversion-test.cloudflareaccess.com",
+    "POLICY_AUD": "social-conversion-test-audience"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "neptune-social-conversion-test",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "neptune-social-conversion-media-test"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "EVENTS_QUEUE",
+        "queue": "neptune-social-events-test"
+      }
+    ]
+  },
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "320260811",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    }
+  ]
+}
