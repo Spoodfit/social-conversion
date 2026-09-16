@@ -29,4 +29,6 @@ if (!app.includes('SC_INBOX_UNREAD_MANUAL_SELECTION_V1')) {
   fs.writeFileSync(appPath, app);
 }
 
+await import('./fix-inbox-todo-semantics-ui.mjs');
+
 console.log('Unread Inbox now requires an explicit click before marking a conversation as read.');

@@ -17,3 +17,10 @@
 .sidebar-collapsed .sc3-sidebar nav button,.sidebar-collapsed .sc3-side-bottom button{justify-content:center;padding-left:0;padding-right:0;gap:0}
 .sidebar-collapsed .sc3-sidebar nav button svg,.sidebar-collapsed .sc3-side-bottom button svg{margin:0}
 @media(max-width:760px){.sc22-triage-tabs{padding-bottom:6px}.sc22-triage-tabs button{font-size:9px;padding:6px 9px}.sc22-inbox-head-actions{gap:5px}.sc24-sidebar-toggle{display:none}}
+
+/* Inbox triage visual stability */
+.sc3-conversations>.sc3-search,.sc22-triage-tabs,.sc3-conversations>.sc3-filters{flex:0 0 auto}
+.sc22-triage-tabs{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:0 0 8px;overflow:visible!important;min-height:34px}
+.sc22-triage-tabs button{width:100%;min-width:0;height:30px;padding:0 5px!important;display:flex;align-items:center;justify-content:center;line-height:1;overflow:hidden;text-overflow:ellipsis}
+.sc3-conversation-list{flex:1 1 auto;min-height:0}
+@media(max-width:760px){.sc22-triage-tabs{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.sc22-triage-tabs button{font-size:8px!important;padding:0 3px!important}}
