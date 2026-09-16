@@ -68,7 +68,23 @@ jobs:
       - name: Validate deployment config
         run: npm run validate:production-config
       - name: Build
-        run: npm run build
+        shell: bash
+        run: |
+          set +e
+          npm run build 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          exit $status
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            build.log
+            src/LiveAppV3.tsx
+            src/worker/production.ts
+            src/worker/index.ts
+          if-no-files-found: ignore
       - name: Wrangler dry-run
         run: npm run cf:check
 
