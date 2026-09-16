@@ -3,6 +3,10 @@ import fs from 'node:fs';
 const path = 'src/LiveAppV3.tsx';
 let source = fs.readFileSync(path, 'utf8');
 
+source = source.replace(
+  'function AccountPanel({ connections, ready, metaReady, linkedinReady, onConnectLinkedIn, onClose, onConnect, onConnectMeta, activeAccountId, onSwitch }: {',
+  'function AccountPanel({ connections, ready, metaReady, linkedinReady, onConnectLinkedIn, threadsReady, onConnectThreads, onClose, onConnect, onConnectMeta, activeAccountId, onSwitch }: {',
+);
 source = source.replaceAll(
   "connection.platform === 'linkedin' ? !runtime.linkedinOAuthReady : connection.platform === 'facebook' ? !runtime.metaOAuthReady : !ready[connection.platform]",
   "connection.platform === 'threads' ? !runtime.threadsOAuthReady : connection.platform === 'linkedin' ? !runtime.linkedinOAuthReady : connection.platform === 'facebook' ? !runtime.metaOAuthReady : !ready[connection.platform as SocialPlatform]",
@@ -24,6 +28,9 @@ source = source.replaceAll(
   'Instagram, Facebook, LinkedIn, Threads, YouTube ou TikTok',
 );
 
+if (!source.includes('linkedinReady, onConnectLinkedIn, threadsReady, onConnectThreads')) {
+  throw new Error('Threads generated UI fix failed: AccountPanel does not destructure Threads props.');
+}
 if (!source.includes("connection.platform === 'threads'")) {
   throw new Error('Threads generated UI fix failed: account routing does not contain Threads.');
 }
