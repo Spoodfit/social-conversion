@@ -12,7 +12,10 @@ let sync = fs.readFileSync(syncPath, 'utf8');
 if (!sync.includes('SC_FACEBOOK_PERMISSION_GATES_V1')) {
   sync = replaceOnce(
     sync,
-`    if (scopes.includes('pages_read_engagement') || scopes.includes('pages_manage_engagement') || scopes.includes('pages_read_user_content')) {
+`    // The page token is the source of truth. Stored permission metadata can be stale
+    // after a Meta re-authorization, so attempt comment synchronization whenever
+    // Page posts are readable and let Graph return an explicit permission error.
+    if (posts.length) {
       try {
         comments = await syncComments(db, env, connection, token, posts, fetchImpl);
       } catch (error) {
