@@ -1,9 +1,5 @@
 import fs from 'node:fs';
 
-// Run first in patch:ui so the Facebook runtime starts from the permissions Meta
-// actually granted before the later Inbox/comment patches are applied.
-await import('./fix-facebook-permission-gates.mjs');
-
 const path = 'src/PlannerComposerPreview.tsx';
 const source = fs.readFileSync(path, 'utf8');
 
