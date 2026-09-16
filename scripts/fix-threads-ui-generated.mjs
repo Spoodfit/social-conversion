@@ -133,3 +133,4 @@ fs.writeFileSync(path, source);
 console.log('Generated Threads account routing finalized for the current production UI.');
 
 await import('./apply-threads-compliance-callbacks.mjs');
+await import('./apply-threads-runtime-sync.mjs');
