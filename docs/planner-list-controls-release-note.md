@@ -1,0 +1,1 @@
+Planner list UX: search, filters, sorting, result count, reset and empty filtered-state handling.
