@@ -1,0 +1,17 @@
+.sc3-cancel-publication{
+  width:100%;
+  min-height:36px;
+  margin-top:8px;
+  border:1px solid #efcdd3;
+  border-radius:10px;
+  background:#fff;
+  color:#a63b4b;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  font-size:8px;
+  font-weight:900;
+  cursor:pointer;
+}
+.sc3-cancel-publication:hover{background:#fff6f7;border-color:#e7aeb7}.sc3-cancel-publication:disabled{opacity:.45;cursor:not-allowed}

@@ -1,0 +1,101 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neptune-social-conversion",
+  "main": "src/worker/cockpit-production.ts",
+  "compatibility_date": "2026-08-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "keep_vars": true,
+  "routes": [
+    {
+      "pattern": "social.neptunebusiness.com",
+      "custom_domain": true
+    }
+  ],
+  "placement": { "mode": "smart" },
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/health", "/api/*", "/webhooks/*", "/oauth/*"]
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "APP_ENV": "validation",
+    "DEMO_MODE": "false",
+    "LIVE_READY": "true",
+    "WORKERS_AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "META_GRAPH_VERSION": "v24.0",
+    "META_APP_ID": "2446518689171895",
+    "META_LOGIN_CONFIG_ID": "1464118115528870",
+    "META_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/meta/callback",
+    "INSTAGRAM_APP_ID": "2631396647296711",
+    "INSTAGRAM_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/instagram/callback",
+    "YOUTUBE_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/youtube/callback",
+    "TIKTOK_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/tiktok/callback",
+    "LINKEDIN_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/linkedin/callback",
+    "THREADS_APP_ID": "4395903137390156",
+    "THREADS_REDIRECT_URI": "https://social.neptunebusiness.com/oauth/threads/callback",
+    "TEAM_DOMAIN": "https://neptune-business.cloudflareaccess.com",
+    "POLICY_AUD": "34242650323f08b7d0ee045701f9b38b33b7e15009689e80253ffe6329111374"
+  },
+  "triggers": {
+    "crons": ["*/1 * * * *"]
+  },
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "320260811",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "neptune-social-conversion",
+      "database_id": "6d245c85-f43b-49f6-9a9e-d6f9323ce946",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "neptune-social-conversion-media"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "EVENTS_QUEUE",
+        "queue": "neptune-social-events"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "neptune-social-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "neptune-social-events-dlq"
+      }
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
+  }
+}
